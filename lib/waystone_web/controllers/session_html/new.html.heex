@@ -1,0 +1,22 @@
+<Layouts.app flash={@flash}>
+  <div class="grid flex-1 place-items-center px-4">
+    <div class="w-full max-w-sm">
+      <h1 class="text-2xl font-semibold tracking-tight">Join the room</h1>
+
+      <p class="mt-2 text-sm leading-relaxed text-base-content/70">
+        Pick a name for this visit. It stays until you close the browser.
+      </p>
+
+      <.form for={@form} action={~p"/join"} method="post" class="mt-6">
+        <.input
+          field={@form[:display_name]}
+          label="Name"
+          autocomplete="nickname"
+          autofocus
+          required
+          maxlength="24"
+        /> <.button variant="primary" class="btn btn-primary mt-2 w-full">Continue</.button>
+      </.form>
+    </div>
+  </div>
+</Layouts.app>
