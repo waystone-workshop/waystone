@@ -23,7 +23,7 @@ https://docs.docker.com/engine/install/debian/ .
    invitation code and voice key. Existing `.env` is preserved. Keep an offline
    copy of these credentials and the database backup; never commit them.
 3. Publish the completed GitHub release, then run
-   `sudo bash install-release.sh v0.4.2`. This downloads only fixed assets from
+   `bash install-release.sh v0.4.3`. This downloads only fixed assets from
    the app repository, verifies their SHA-256 checksums, loads the Linux image,
    backs up an existing database, and starts backend, website and voice services.
 4. Enable HTTPS privately through Tailscale:

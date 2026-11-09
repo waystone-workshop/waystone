@@ -11,7 +11,7 @@ if [[ ! -e .env ]]; then
   ip=$(tailscale ip -4)
   [[ "$host" =~ ^[a-zA-Z0-9.-]+\.ts\.net$ && "$ip" =~ ^100\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Cannot identify Mars tailnet address' >&2; exit 1; }
   {
-    printf 'WAYSTONE_VERSION=0.4.2\nPHX_HOST=%s\n' "$host"
+    printf 'WAYSTONE_VERSION=0.4.3\nPHX_HOST=%s\n' "$host"
     printf 'SECRET_KEY_BASE=%s\n' "$(openssl rand -hex 64)"
     printf 'WAYSTONE_INVITE_CODE=%s\n' "$(openssl rand -hex 16)"
     printf 'LIVEKIT_URL=wss://%s:8443\nLIVEKIT_API_KEY=waystone\n' "$host"
@@ -22,4 +22,4 @@ if [[ ! -e .env ]]; then
 else
   echo 'Existing .env preserved.'
 fi
-echo 'Ready for: bash install-release.sh v0.4.2'
+echo 'Ready for: bash install-release.sh v0.4.3'

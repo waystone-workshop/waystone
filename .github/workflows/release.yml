@@ -64,7 +64,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           VERSION="${TAG#v}"
-          docker build -t "waystone-backend:$VERSION" backend
+          docker build --platform linux/amd64 -t "waystone-backend:$VERSION" backend
           mkdir -p server-output
           docker save "waystone-backend:$VERSION" | gzip > server-output/waystone-backend-linux-amd64.tar.gz
           tar -czf server-output/waystone-mars-deploy.tar.gz -C deploy/mars .

@@ -1,4 +1,4 @@
-FROM elixir:1.19.7-otp-28-alpine AS build
+FROM elixir:1.19.5-otp-28-alpine@sha256:bb4b0ee98cafce9e884208747cec16d54715a719939809cf2b5cb817e15d0d30 AS build
 RUN apk add --no-cache build-base git
 WORKDIR /app
 ENV MIX_ENV=prod
@@ -11,7 +11,7 @@ COPY priv priv
 COPY assets assets
 RUN mix assets.deploy && mix release
 
-FROM elixir:1.19.7-otp-28-alpine
+FROM elixir:1.19.5-otp-28-alpine@sha256:bb4b0ee98cafce9e884208747cec16d54715a719939809cf2b5cb817e15d0d30
 RUN apk add --no-cache libstdc++ curl sqlite && addgroup -g 10001 waystone && adduser -D -u 10001 -G waystone waystone
 WORKDIR /app
 COPY --from=build --chown=10001:10001 /app/_build/prod/rel/waystone ./
