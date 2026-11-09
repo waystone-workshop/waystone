@@ -14,16 +14,18 @@ defmodule WaystoneWeb.Router do
     plug :accepts, ["json"]
   end
 
-  scope "/", WaystoneWeb do
-    pipe_through :browser
-
-    get "/join", SessionController, :new
-    post "/join", SessionController, :create
-    delete "/join", SessionController, :delete
-
-    live_session :chat, on_mount: [{WaystoneWeb.NameHook, :require_name}] do
-      live "/", ChatLive
-    end
+  scope "/api", WaystoneWeb do
+    pipe_through :api
+    post "/session", ApiController, :session
+    get "/channels", ApiController, :channels
+    post "/channels", ApiController, :create_channel
+    delete "/channels/:id", ApiController, :delete_channel
+    get "/channels/:id/board", ApiController, :channel_board
+    put "/channels/:id/board", ApiController, :save_channel_board
+    get "/channels/:id/messages", ApiController, :messages
+    post "/channels/:id/messages", ApiController, :send_message
+    get "/channels/:id/export", ApiController, :export
+    get "/messages/:message_id/attachments/:attachment_id", ApiController, :attachment
   end
 
   # Other scopes may use custom stacks.

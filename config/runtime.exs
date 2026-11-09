@@ -1,5 +1,7 @@
 import Config
 
+config :waystone, :invite_code, System.get_env("WAYSTONE_INVITE_CODE")
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
@@ -66,7 +68,9 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
-  config :waystone, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+  invite_code = System.get_env("WAYSTONE_INVITE_CODE")
+  if invite_code in [nil, ""], do: raise("WAYSTONE_INVITE_CODE is required and cannot be empty")
+  config :waystone, :invite_code, invite_code
 
   config :waystone, WaystoneWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],

@@ -4,17 +4,17 @@ defmodule Waystone.ChatTest do
   alias Waystone.Chat
 
   test "stores a trimmed message and lists messages in order" do
-    assert {:ok, first} = Chat.create_message("Ada", %{"body" => " hello "})
+    assert {:ok, first} = Chat.send_message(1, "Ada", %{"body" => " hello "})
     assert first.author == "Ada"
     assert first.body == "hello"
 
-    assert {:ok, second} = Chat.create_message("Grace", %{"body" => "hi"})
+    assert {:ok, second} = Chat.send_message(1, "Grace", %{"body" => "hi"})
 
-    assert Chat.list_messages() |> Enum.map(& &1.id) == [first.id, second.id]
+    assert Chat.recent_messages(1) |> Enum.map(& &1.id) == [first.id, second.id]
   end
 
   test "rejects a blank message" do
-    assert {:error, changeset} = Chat.create_message("Ada", %{"body" => "   "})
+    assert {:error, changeset} = Chat.send_message(1, "Ada", %{"body" => "   "})
     assert "can't be blank" in errors_on(changeset).body
   end
 

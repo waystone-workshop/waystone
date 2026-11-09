@@ -12,7 +12,6 @@ defmodule Waystone.Application do
       Waystone.Repo,
       {Ecto.Migrator,
        repos: Application.fetch_env!(:waystone, :ecto_repos), skip: skip_migrations?()},
-      {DNSCluster, query: Application.get_env(:waystone, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Waystone.PubSub},
       # Start a worker by calling: Waystone.Worker.start_link(arg)
       # {Waystone.Worker, arg},

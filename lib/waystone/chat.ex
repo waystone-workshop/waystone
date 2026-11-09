@@ -1,6 +1,6 @@
 defmodule Waystone.Chat do
   @moduledoc """
-  The single lobby: display names and text messages.
+  Channels, persisted messages and real-time delivery for one friend group.
   """
 
   import Ecto.Query
@@ -8,24 +8,170 @@ defmodule Waystone.Chat do
   alias Waystone.Chat.Message
   alias Waystone.Repo
 
-  @topic "chat:lobby"
-  @recent_limit 100
+  def topic(channel_id), do: "chat:#{channel_id}"
 
-  def topic, do: @topic
+  def list_channels, do: Repo.all(from c in Waystone.Chat.Channel, order_by: c.id)
+  def get_channel!(id), do: Repo.get!(Waystone.Chat.Channel, id)
 
-  def list_messages do
-    Message
-    |> order_by(desc: :id)
-    |> limit(^@recent_limit)
-    |> Repo.all()
-    |> Enum.reverse()
+  def create_channel(attrs) do
+    %Waystone.Chat.Channel{}
+    |> Waystone.Chat.Channel.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, channel} ->
+        WaystoneWeb.Endpoint.broadcast("directory", "channel_created", channel_json(channel))
+
+        {:ok, channel}
+
+      error ->
+        error
+    end
   end
 
-  def create_message(author, attrs) when is_binary(author) and is_map(attrs) do
-    %Message{}
-    |> Message.changeset(%{author: author, body: attrs["body"] || attrs[:body]})
-    |> Repo.insert()
-    |> broadcast()
+  def get_board!(channel_id),
+    do: Repo.get_by!(Waystone.Chat.ChannelBoard, channel_id: get_channel!(channel_id).id)
+
+  def channel_json(channel) do
+    board = get_board!(channel.id)
+    %{id: channel.id, name: channel.name, board_id: board.id}
+  end
+
+  def board_json(board) do
+    %{
+      format: "waystone-board",
+      version: 1,
+      board: %{
+        version: 1,
+        id: board.id,
+        type: "board",
+        title: board.title,
+        revision: board.revision,
+        content: board.content,
+        createdAt: DateTime.to_iso8601(board.inserted_at),
+        updatedAt: DateTime.to_iso8601(board.updated_at)
+      },
+      canvases: board.resources
+    }
+  end
+
+  def save_board(channel_id, params) do
+    board = get_board!(channel_id)
+
+    with true <- params["base_revision"] == board.revision,
+         {:ok, attrs} <- Waystone.Chat.BoardDocument.validate(params, board.id) do
+      result =
+        board
+        |> Ecto.Changeset.change(attrs)
+        |> Ecto.Changeset.optimistic_lock(:revision)
+        |> Repo.update()
+
+      case result do
+        {:ok, saved} ->
+          WaystoneWeb.Endpoint.broadcast("directory", "board_updated", %{
+            channel_id: saved.channel_id,
+            board_id: saved.id,
+            revision: saved.revision
+          })
+
+          {:ok, saved}
+
+        error ->
+          error
+      end
+    else
+      false -> {:error, :conflict}
+      error -> error
+    end
+  rescue
+    Ecto.StaleEntryError -> {:error, :conflict}
+  end
+
+  def delete_channel(channel_id) do
+    channel = get_channel!(channel_id)
+    board = get_board!(channel.id)
+
+    result =
+      Repo.transaction(fn ->
+        Repo.delete_all(from m in Message, where: m.channel_id == ^channel.id)
+        Repo.delete!(channel)
+      end)
+
+    case result do
+      {:ok, _} ->
+        payload = %{id: channel.id, board_id: board.id}
+        WaystoneWeb.Endpoint.broadcast("directory", "channel_deleted", payload)
+        WaystoneWeb.Endpoint.broadcast(topic(channel.id), "channel_deleted", payload)
+        {:ok, channel}
+
+      error ->
+        error
+    end
+  end
+
+  def messages(channel_id, opts \\ []) do
+    query = from m in Message, where: m.channel_id == ^channel_id, order_by: [asc: m.id]
+    query = if opts[:from], do: from(m in query, where: m.id >= ^opts[:from]), else: query
+    query = if opts[:to], do: from(m in query, where: m.id <= ^opts[:to]), else: query
+    query = if opts[:metadata_only], do: metadata_only(query), else: query
+    Repo.all(query)
+  end
+
+  def recent_messages(channel_id, before_id \\ nil) do
+    query =
+      from m in Message, where: m.channel_id == ^channel_id, order_by: [desc: m.id], limit: 100
+
+    query = if before_id, do: from(m in query, where: m.id < ^before_id), else: query
+    query |> metadata_only() |> Repo.all() |> Enum.reverse()
+  end
+
+  # History and Markdown previews must not load megabytes of image data per
+  # message. SQLite strips the payloads before returning attachment metadata.
+  defp metadata_only(query) do
+    from m in query,
+      select: %{
+        id: m.id,
+        channel_id: m.channel_id,
+        author: m.author,
+        body: m.body,
+        inserted_at: m.inserted_at,
+        attachments:
+          type(
+            fragment(
+              "(SELECT json_group_array(json_remove(value, '$.data')) FROM json_each(?))",
+              m.attachments
+            ),
+            {:array, :map}
+          )
+      }
+  end
+
+  def send_message(channel_id, author, attrs) do
+    get_channel!(channel_id)
+
+    with {:ok, attachments} <- Waystone.Chat.Attachments.validate(attrs["attachments"] || []) do
+      %Message{channel_id: channel_id, attachments: attachments}
+      |> Message.changeset(%{author: author, body: attrs["body"] || ""})
+      |> Repo.insert()
+      |> case do
+        {:ok, message} ->
+          WaystoneWeb.Endpoint.broadcast(topic(channel_id), "message", message_json(message))
+          {:ok, message}
+
+        error ->
+          error
+      end
+    end
+  end
+
+  def message_json(message) do
+    %{
+      id: message.id,
+      channel_id: message.channel_id,
+      author: message.author,
+      body: message.body || "",
+      attachments: Enum.map(message.attachments, &Map.drop(&1, ["data"])),
+      inserted_at: message.inserted_at
+    }
   end
 
   def name_changeset(attrs) do
@@ -46,13 +192,6 @@ defmodule Waystone.Chat do
       {:error, %{changeset | action: :insert}}
     end
   end
-
-  defp broadcast({:ok, message} = result) do
-    Phoenix.PubSub.broadcast(Waystone.PubSub, @topic, {:new_message, message})
-    result
-  end
-
-  defp broadcast({:error, %Ecto.Changeset{}} = error), do: error
 
   defp validate_single_line(changeset, field) do
     Ecto.Changeset.validate_change(changeset, field, fn ^field, value ->

@@ -11,6 +11,8 @@ defmodule WaystoneWeb.Endpoint do
     same_site: "Lax"
   ]
 
+  socket "/socket", WaystoneWeb.UserSocket, websocket: [check_origin: false], longpoll: false
+
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [connect_info: [session: @session_options]],
     longpoll: [connect_info: [session: @session_options]]
@@ -45,6 +47,7 @@ defmodule WaystoneWeb.Endpoint do
 
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
+    length: 29_000_000,
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
 

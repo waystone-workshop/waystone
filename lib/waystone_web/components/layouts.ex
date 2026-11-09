@@ -38,24 +38,6 @@ defmodule WaystoneWeb.Layouts do
   def app(assigns) do
     ~H"""
     <div class="flex h-dvh flex-col">
-      <header class="flex items-center justify-between gap-4 border-b border-base-300 px-4 py-3">
-        <a href={~p"/"} class="text-sm font-semibold tracking-wide">Waystone</a>
-        <div class="flex items-center gap-3">
-          <span :if={@display_name} class="max-w-40 truncate text-sm text-base-content/70">
-            {@display_name}
-          </span>
-          <.link
-            :if={@display_name}
-            href={~p"/join"}
-            method="delete"
-            class="text-sm text-base-content/70 hover:text-base-content"
-          >
-            Change name
-          </.link>
-          <.theme_toggle />
-        </div>
-      </header>
-
       <main class="flex min-h-0 flex-1 flex-col">
         {render_slot(@inner_block)}
       </main>
