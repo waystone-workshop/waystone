@@ -19,7 +19,7 @@ https://docs.docker.com/engine/install/debian/ .
 
 1. Copy this directory to `/opt/waystone` on Mars. It must be private to the
    deployment administrator, since `.env` will hold production secrets.
-2. Run `sudo bash bootstrap.sh`. It generates a fresh application secret,
+2. Run `bash bootstrap.sh` as the account that owns `/opt/waystone`. It generates a fresh application secret,
    invitation code and voice key. Existing `.env` is preserved. Keep an offline
    copy of these credentials and the database backup; never commit them.
 3. Publish the completed GitHub release, then run
@@ -42,10 +42,15 @@ https://docs.docker.com/engine/install/debian/ .
 6. Install the update timer after the first successful rollout:
 
    ```sh
-   sudo cp waystone-update.service waystone-update.timer /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now waystone-update.timer
+   mkdir -p ~/.config/systemd/user
+   cp waystone-update.service waystone-update.timer ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   systemctl --user enable --now waystone-update.timer
    ```
+
+   Enable linger once with `sudo loginctl enable-linger solrak` so the user timer
+   survives logout. The deploy account needs Docker access and ownership of the
+   deployment directory; it does not need passwordless sudo.
 
 Friends download `Waystone-Setup.exe` once from the landing page. Its release URL
 is stable. Installed Windows clients download stable updates in the background
@@ -55,10 +60,10 @@ release download; native automatic updates need Apple signing/notarization.
 ## Operations and recovery
 
 - `sudo docker compose ps` / `sudo docker compose logs --tail=100 backend`.
-- `sudo journalctl -u waystone-update.service` for rollout failures.
+- `journalctl --user -u waystone-update.service` for rollout failures.
 - The persistent `waystone-data` volume contains the database and pre-deployment
   snapshots under `/data/backups`. Never use `docker compose down -v`.
-- Stop the timer with `sudo systemctl stop waystone-update.timer` before manual
+- Stop the timer with `systemctl --user stop waystone-update.timer` before manual
   recovery. The deployment lock prevents overlapping rollouts.
 - A failed rollout stops the backend and retains the database and backup. It
   does not silently restore an old database and discard newer messages.
