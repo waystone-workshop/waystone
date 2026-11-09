@@ -3,6 +3,9 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   backend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
@@ -18,23 +21,26 @@ jobs:
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        working-directory: desktop
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm test
       - run: npm run test:e2e
-      - run: npm run package
+      - run: npm run package -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - uses: actions/upload-artifact@v4
         with:
           name: waystone-${{ matrix.os }}
           path: |
-            desktop/release/*.exe
-            desktop/release/*.dmg
+            frontend/release/*.exe
+            frontend/release/*.dmg
+            frontend/release/*.zip
+            frontend/release/*.yml
+            frontend/release/*.blockmap

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Waystone is a little place for your people. Chat, audio calls, drawings, and boards for one group of friends."
+    />
+    <meta name="csrf-token" content={get_csrf_token()} /> <.live_title
+      default="Waystone"
+      phx-no-format
+    >{assigns[:page_title]}</.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
+    </script>
+  </head>
+
+  <body class="h-dvh overflow-hidden bg-base-100 text-base-content antialiased">
+    {@inner_content}
+  </body>
+</html>

@@ -3,6 +3,13 @@
 An installable app for one group of friends, with one Phoenix backend on Mars.
 Windows is the primary desktop target; macOS uses the same client.
 
+The landing page lives in the independent
+[waystone-website repository](https://github.com/waystone-workshop/waystone-website).
+Shared styles and assets live in the versioned
+[design-system repository](https://github.com/waystone-workshop/design-system). See
+[distribution and Mars CI/CD](docs/distribution.md) for the first rollout and
+automatic desktop updates.
+
 ## First phase
 
 - Multiple text channels, live messages, and paginated history.
@@ -16,15 +23,29 @@ Windows is the primary desktop target; macOS uses the same client.
   not just the 100 messages initially visible. Preserve authors, UTC timestamps,
   message IDs, channel name, pictures, and drawings.
 
-Audio/video calls, screen sharing, and the multimedia canvas are later phases.
+Audio calls are available per text channel with join/leave, mute, deafen, and
+participant/speaking indicators. Video calls and screen sharing remain deferred.
 
 ## Architecture
 
-`desktop/` contains a locally bundled Electron UI. It renders messages, manages
+Applications are peers:
+
+- `frontend/`: Electron desktop client, tests, and installers.
+- `backend/`: Phoenix API, WebSockets, migrations, and tests.
+- `voice/`: LiveKit audio forwarding service and local startup configuration.
+- `.github/`: shared CI workflows.
+
+Run commands from each application's folder. Add future services as their own
+top-level folders. Phoenix web assets remain in `backend/assets/`.
+Local retired lobby files are preserved in `backend/legacy/` (ignored by Git),
+outside active compilation and tests.
+
+`frontend/` contains a locally bundled Electron UI. It renders messages, manages
 local drafts, draws on canvas, and talks to the backend over HTTP and Phoenix
-Channels. The renderer has no Node integration; a sandboxed, isolated preload
-exposes only API requests and export saving. Remote navigation and permissions
-are denied. HTTPS is required except on localhost for development.
+Channels. Audio uses WebRTC through the separate LiveKit service. The renderer has no Node integration; a sandboxed, isolated preload
+exposes API requests, local Canvas storage, and export saving. Remote navigation
+is denied; media permissions allow only microphone capture from the bundled
+desktop page. HTTPS is required except on localhost for development.
 
 Phoenix provides `/api` JSON endpoints and `/socket` authenticated WebSockets.
 One SQLite database holds channels, messages and image bytes (base64 in message
@@ -33,7 +54,7 @@ There is no clustering or separate broker. Large histories/media volumes will
 need attachment storage and streaming exports; current ZIP generation is in memory.
 
 The old LiveView lobby and browser-session join routes have been retired. The
-root web route is intentionally absent; the desktop app is the user interface.
+backend provides the API; the website is deployed independently. Chat and calls use the desktop app.
 Existing messages migrate into `#general` without changing their IDs or timestamps.
 
 ## Backend development
@@ -41,6 +62,7 @@ Existing messages migrate into `#general` without changing their IDs or timestam
 Requires Elixir 1.17+ and compatible Erlang/OTP.
 
 ```sh
+cd backend
 mix setup
 mix phx.server
 ```
@@ -54,10 +76,24 @@ an invitation code. Set `WAYSTONE_INVITE_CODE` to test invitation-only access lo
 Requires Node.js 24+.
 
 ```sh
-cd desktop
+cd frontend
 npm ci
 npm start
 ```
+
+For audio, start the third service in another PowerShell terminal from the repo root:
+
+```powershell
+cd voice
+.\start.ps1
+```
+
+Choose **Join audio** inside a channel. The microphone is requested only when
+joining. Switching channels, leaving the call/workspace, or closing the app
+releases it. Deafen silences incoming audio separately from microphone mute.
+See [voice setup](voice/README.md) for remote deployment and encryption details.
+The checked-in voice settings work only on the same machine; other devices need
+a reachable LiveKit host and Phoenix's `LIVEKIT_*` environment variables.
 
 Enter `http://localhost:4000`, your display name, and the invitation code if set.
 The address and name are remembered. Tokens and invitation codes are not persisted;
@@ -73,8 +109,11 @@ npm run package:mac:zip  # alternative macOS app archive
 ```
 
 GitHub Actions checks the backend and builds both installers. Installers are
-currently unsigned; distribution signing/notarization and automatic updates are
-not configured. CI uploads build artifacts; it does not publish releases.
+currently unsigned; distribution signing/notarization is not configured.
+Installed Windows builds download updates in the background and install on normal
+exit after a newer stable GitHub Release is published. Version tags build draft
+releases with update feeds; publish a reviewed draft to make it available.
+See [distribution](docs/distribution.md) for macOS limitations and rollout steps.
 
 ## Mars deployment
 
@@ -108,9 +147,13 @@ are implemented. Exports label the transcript as untrusted discussion for agents
 ## Verification
 
 ```sh
-mix precommit
-cd desktop && npm test && npm run build && npm run test:e2e
+cd backend && mix precommit
+cd ../frontend && npm test && npm run build && npm run test:e2e
 ```
+
+With the real local backend and voice service running, `npm run test:audio`
+from `frontend/` launches two isolated desktop clients with synthetic microphones
+and checks received audio packets, mute, deafen, channel switching, and cleanup.
 
 Backend tests cover invitation checks, authorization, channel isolation, socket
 delivery, image validation/download, pagination, and ZIP exports with original

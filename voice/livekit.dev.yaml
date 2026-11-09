@@ -1,0 +1,11 @@
+# Local development only. Production needs private credentials and TLS.
+port: 7880
+bind_addresses:
+  - 127.0.0.1
+rtc:
+  node_ip: 127.0.0.1
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+keys:
+  devkey: waystone-local-development-secret-only

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Waystone</title>
+    <link rel="stylesheet" href="dist/design-system/styles/tokens.css" />
+    <link rel="stylesheet" href="dist/design-system/styles/components.css" />
+    <link rel="stylesheet" href="src/style.css" />
+  </head>
+  <body>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <section id="update-panel" class="update-panel" aria-label="Application update" hidden>
+      <strong id="update-current"></strong>
+      <p id="update-message" role="status"></p>
+      <progress id="update-progress" max="100" aria-label="Update download progress" hidden></progress>
+      <div class="actions">
+        <button id="update-dismiss">Dismiss</button>
+        <button id="update-download" class="primary" hidden>Download update</button>
+        <button id="update-install" class="primary" hidden>Restart and install</button>
+      </div>
+    </section>
+    <section id="join" class="join">
+      <div class="wordmark"><img src="dist/design-system/assets/mark.svg" alt="" width="22" height="22" /> WAYSTONE</div>
+      <h1>A place to make<br />things together.</h1>
+      <p>Your friends. Your conversations. Your next idea.</p>
+
+      <button id="local-canvases" class="offline-entry">
+        Open local Canvases →
+      </button>
+      <form id="join-form">
+        <label
+          >Mars backend address<input
+            id="server"
+            type="url"
+            placeholder="https://mars.example.com"
+            required
+        /></label>
+        <label
+          >Your name<input
+            id="name"
+            maxlength="24"
+            required
+            autocomplete="nickname"
+        /></label>
+        <label
+          >Invitation code<input
+            id="invite"
+            type="password"
+            autocomplete="current-password"
+        /></label>
+        <button class="primary">Join your friends →</button>
+      </form>
+      <small>Use http://localhost:4000 for local development.</small>
+      <p><button id="check-updates" type="button">Check for updates</button></p>
+    </section>
+    <main id="workspace" hidden>
+      <aside>
+        <div class="wordmark"><img src="dist/design-system/assets/mark.svg" alt="" width="22" height="22" /> WAYSTONE</div>
+        <p class="eyebrow">OUR LITTLE CORNER</p>
+        <div class="section-title">
+          <span>TEXT CHANNELS</span
+          ><button id="add-channel" title="Create channel">+</button>
+        </div>
+
+        <button id="workspace-canvases">▧ Canvases</button>
+        <nav id="channels" aria-label="Text channels"></nav>
+        <div class="profile">
+          <strong id="identity"></strong><span id="connection">Connecting…</span
+          ><button id="leave">Leave</button><button id="workspace-updates">Check for updates</button>
+        </div>
+      </aside>
+      <section class="conversation">
+        <header>
+          <div>
+            <h1 id="channel-title">Choose a channel</h1>
+            <p>Talk it through. Sketch it out. Build something.</p>
+          </div>
+          <div class="channel-actions">
+            <button id="join-audio" disabled>Join audio</button>
+            <button id="open-channel-board" disabled>Open channel board</button
+            ><button id="export-open">Export context ↗</button
+            ><button id="delete-channel" disabled>Delete channel</button>
+          </div>
+        </header>
+        <section id="call-panel" class="call-panel" aria-label="Audio call" hidden>
+          <div class="call-heading"><strong id="call-state" role="status">Connecting audio…</strong><span id="call-channel"></span></div>
+          <ul id="call-participants" aria-label="Call participants"></ul>
+          <div class="call-controls">
+            <button id="call-mute" aria-pressed="false">Mute mic</button>
+            <button id="call-deafen" aria-pressed="false">Deafen</button>
+            <button id="call-resume" hidden>Enable audio playback</button>
+            <button id="call-leave" class="call-end">Leave call</button>
+          </div>
+          <small>Microphone only · Deafen silences incoming audio; mute controls your microphone.</small>
+          <div id="call-audio"></div>
+        </section>
+        <button id="older" hidden>Load earlier messages</button>
+        <div id="messages" role="log" aria-label="Messages"></div>
+        <form id="composer">
+          <div id="pending"></div>
+          <label class="sr-only" for="body">Message</label
+          ><textarea
+            id="body"
+            maxlength="2000"
+            rows="2"
+            placeholder="A thought, a question, the start of something…"
+          ></textarea>
+          <footer>
+            <div>
+              <button id="picture" type="button">＋ Picture</button
+              ><button id="draw" type="button">✎ Draw</button
+              ><span id="draft-status"></span>
+            </div>
+            <button id="send" class="primary">Send ↑</button>
+          </footer>
+        </form>
+        <input
+          id="files"
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          multiple
+          hidden
+        />
+      </section>
+    </main>
+    <dialog id="channel-dialog">
+      <form id="channel-form">
+        <h2>A new conversation</h2>
+        <label
+          >Channel name<input
+            id="channel-name"
+            pattern="[a-z0-9][a-z0-9-]{0,39}"
+            maxlength="40"
+            required
+            placeholder="next-big-idea"
+        /></label>
+        <div class="actions">
+          <button type="button" data-close="channel-dialog">Cancel</button
+          ><button class="primary">Create channel</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="drawing-dialog">
+      <h2>Show what you mean.</h2>
+      <label
+        >Canvas name<input
+          id="drawing-title"
+          maxlength="120"
+          value="Untitled drawing"
+      /></label>
+      <p id="drawing-canvas-id" class="canvas-identity"></p>
+      <div class="tools">
+        <label>Ink<input id="ink" type="color" value="#222222" /></label
+        ><label
+          >Size<input
+            id="brush"
+            type="range"
+            min="1"
+            max="30"
+            value="4" /></label
+        ><button id="undo-drawing">Undo</button
+        ><button id="redo-drawing">Redo</button
+        ><button id="clear-drawing">Clear</button>
+      </div>
+      <canvas
+        id="canvas"
+        width="1000"
+        height="600"
+        aria-label="Drawing canvas"
+      ></canvas>
+      <div class="actions">
+        <button data-close="drawing-dialog">Cancel</button
+        ><button id="save-drawing">Save Canvas</button
+        ><button id="duplicate-drawing">Duplicate</button
+        ><button id="export-drawing">Export file</button
+        ><button id="attach-drawing" class="primary">Attach drawing</button>
+      </div>
+    </dialog>
+    <dialog id="export-dialog">
+      <h2>Take the conversation further.</h2>
+      <p>
+        Portable context for your coding agent. Pictures and drawings travel
+        with the ZIP.
+      </p>
+      <label
+        >Messages<select id="export-scope">
+          <option value="all">Entire channel</option>
+          <option value="selection">Selected range (inclusive)</option>
+        </select></label
+      >
+      <p id="selection-help">
+        Select the first and last messages in the conversation to define a
+        range.
+      </p>
+      <div id="export-summary"></div>
+      <pre id="export-preview"></pre>
+      <div class="actions">
+        <button data-close="export-dialog">Close</button
+        ><button id="copy-context">Copy Markdown</button
+        ><button id="save-markdown">Save Markdown</button
+        ><button id="save-bundle" class="primary">Save ZIP + images</button>
+      </div>
+    </dialog>
+    <dialog id="canvas-library">
+      <div class="library-heading">
+        <div>
+          <p class="eyebrow">YOUR LOCAL COLLECTION</p>
+          <h2>Canvases</h2>
+          <p>Boards, images and drawings you can keep, reopen and reuse.</p>
+        </div>
+        <button data-close="canvas-library">Close</button>
+      </div>
+      <div class="library-tools">
+        <button id="new-canvas-drawing" class="primary">＋ Drawing</button
+        ><button id="new-canvas-image">＋ Image</button
+        ><button id="import-canvas">Import Canvas file</button>
+      </div>
+      <p id="canvas-library-status" role="status"></p>
+      <div id="canvas-grid"></div>
+      <input
+        id="canvas-image-file"
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        hidden
+      />
+    </dialog>
+    <dialog id="shared-image-viewer">
+      <img id="shared-image" alt="Shared image preview" />
+      <div class="actions">
+        <button data-close="shared-image-viewer">Close</button>
+      </div>
+    </dialog>
+    <dialog id="image-viewer">
+      <label>Canvas name<input id="image-title" maxlength="120" /></label
+      ><img id="canvas-image" alt="Canvas image" />
+      <p id="image-canvas-id"></p>
+      <div class="actions">
+        <button data-close="image-viewer">Close</button
+        ><button id="save-image">Save name</button
+        ><button id="duplicate-image">Duplicate</button
+        ><button id="export-image">Export file</button
+        ><button id="attach-image" class="primary">Attach to chat</button>
+      </div>
+    </dialog>
+    <dialog id="board-dialog">
+      <div class="board-header">
+        <div>
+          <p class="eyebrow">A PLACE TO THINK TOGETHER</p>
+          <input
+            id="board-title"
+            aria-label="Board name"
+            maxlength="120"
+            value="Untitled board"
+          /><span id="board-status" role="status"></span>
+        </div>
+        <div class="board-actions">
+          <button id="board-undo">Undo</button
+          ><button id="board-redo">Redo</button
+          ><button id="board-export-file">Save portable file</button
+          ><button id="board-export-context">Export plan</button
+          ><button id="board-save" class="primary">Save board</button
+          ><button id="board-close" data-close="board-dialog">Close</button>
+        </div>
+      </div>
+      <div class="board-toolbar">
+        <button id="board-add-note">＋ Sticky note</button
+        ><button id="board-add-text">＋ Text</button
+        ><button id="board-add-canvas">＋ From library</button
+        ><span class="toolbar-divider"></span><button id="board-pan">Pan</button
+        ><button id="board-connect">Connect →</button
+        ><span id="board-mode">Select tool</span>
+        <div class="board-zoom-controls">
+          <button id="board-zoom-out" aria-label="Zoom out">−</button
+          ><span id="board-zoom">100%</span
+          ><button id="board-zoom-in" aria-label="Zoom in">＋</button
+          ><button id="board-fit">Fit</button>
+        </div>
+      </div>
+      <div class="board-layout">
+        <div id="board-surface" tabindex="0" aria-label="Planning board">
+          <div id="board-world"></div>
+        </div>
+        <aside class="board-inspector">
+          <p class="eyebrow">ARRANGE YOUR IDEAS</p>
+          <strong id="board-selection-status">0 selected</strong>
+          <p id="board-feedback" role="status"></p>
+          <p class="board-help">
+            Drag items to move them. Shift-click or drag on empty space to
+            select several. Hold Space or use Pan to move around. Ctrl/⌘ +
+            scroll to zoom.
+          </p>
+          <div id="board-item-controls" hidden>
+            <label id="board-text-label"
+              >Content<textarea
+                id="board-item-text"
+                rows="7"
+                maxlength="10000"
+              ></textarea></label
+            ><label id="board-color-label"
+              >Color<select id="board-item-color">
+                <option value="#f4df91">Sunflower</option>
+                <option value="#d5ec9c">Sage</option>
+                <option value="#b5d9ed">Sky</option>
+                <option value="#e3c4eb">Lilac</option>
+                <option value="#f0b8ac">Peach</option>
+              </select></label
+            ><label
+              >Rotation<input
+                id="board-item-rotation"
+                type="number"
+                min="-360"
+                max="360"
+                value="0"
+            /></label>
+            <p id="board-canvas-info"></p>
+            <button id="board-open-canvas">Edit source Canvas</button
+            ><button id="board-front">Bring to front</button>
+          </div>
+          <div id="board-edge-controls" hidden>
+            <label
+              >Relationship label<input id="board-edge-label" maxlength="200"
+            /></label>
+          </div>
+          <div class="board-inspector-actions">
+            <button id="board-duplicate">Place again / copy note</button
+            ><button id="board-delete">Remove selection</button>
+          </div>
+          <p class="board-help">
+            Moving a Canvas changes this placement. Editing its source changes
+            every local reference. Place again reuses the source; use Duplicate
+            in the Canvas editor for an independent object.
+          </p>
+        </aside>
+      </div>
+    </dialog>
+    <dialog id="board-picker-dialog">
+      <h2>Bring in a Canvas</h2>
+      <div id="board-canvas-picker"></div>
+      <div class="actions">
+        <button data-close="board-picker-dialog">Close</button>
+      </div>
+    </dialog>
+    <dialog id="board-context-dialog">
+      <h2>Your plan, ready to build.</h2>
+      <p>
+        Notes and relationships as Markdown, with images, drawing previews and
+        an editable board file.
+      </p>
+      <pre id="board-plan-preview"></pre>
+      <div class="actions">
+        <button data-close="board-context-dialog">Close</button
+        ><button id="board-save-context" class="primary">
+          Save context ZIP
+        </button>
+      </div>
+    </dialog>
+    <script type="module" src="dist/app.js"></script>
+  </body>
+</html>

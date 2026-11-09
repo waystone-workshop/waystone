@@ -1,0 +1,90 @@
+{
+  "name": "waystone-desktop",
+  "version": "0.4.1",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/waystone-workshop/waystone.git"
+  },
+  "description": "A place for friends to talk, draw and build together",
+  "author": "Waystone",
+  "main": "main.cjs",
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "start": "npm run build && electron .",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "package": "npm run build && electron-builder",
+    "package:win": "npm run build && electron-builder --win nsis",
+    "package:mac": "npm run build && electron-builder --mac dmg",
+    "test:e2e": "npm run build && node e2e/smoke.mjs",
+    "test:audio": "npm run build && node e2e/audio.mjs",
+    "package:mac:zip": "npm run build && electron-builder --mac zip"
+  },
+  "dependencies": {
+    "@waystone-workshop/design-system": "https://github.com/waystone-workshop/design-system/archive/refs/tags/v0.1.0.tar.gz",
+    "electron-updater": "^6.8.11",
+    "fflate": "^0.8.3",
+    "livekit-client": "^2.23.0",
+    "phoenix": "^1.8.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "electron": "^42.0.0",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^29.1.1",
+    "ws": "^8.22.1"
+  },
+  "build": {
+    "appId": "dev.waystone.desktop",
+    "productName": "Waystone",
+    "files": [
+      "main.cjs",
+      "updater.cjs",
+      "preload.cjs",
+      "index.html",
+      "src/style.css",
+      "dist/**",
+      "policy.cjs",
+      "media-policy.cjs",
+      "canvas-store.cjs",
+      "src/canvas-model.cjs",
+      "src/board-model.cjs",
+      "board-files.cjs"
+    ],
+    "win": {
+      "target": "nsis",
+      "artifactName": "Waystone-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Use your microphone when you join a Waystone audio call."
+      },
+      "category": "public.app-category.social-networking"
+    },
+    "directories": {
+      "output": "release"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "waystone-workshop",
+        "repo": "waystone",
+        "releaseType": "draft"
+      }
+    ]
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
+  }
+}
