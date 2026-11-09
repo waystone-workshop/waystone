@@ -14,6 +14,11 @@ defmodule WaystoneWeb.Router do
     plug :accepts, ["json"]
   end
 
+  scope "/", WaystoneWeb do
+    pipe_through :api
+    get "/health", HealthController, :show
+  end
+
   scope "/api", WaystoneWeb do
     pipe_through :api
     post "/session", ApiController, :session

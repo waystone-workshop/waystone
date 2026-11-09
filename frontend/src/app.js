@@ -27,7 +27,7 @@ let preview = "",
   sending = false,
   imageUrls = [];
 const stored = JSON.parse(localStorage.getItem("waystone-preferences") || "{}");
-$("server").value = stored.server || "http://localhost:4000";
+$("server").value = stored.server || process.env.WAYSTONE_SERVER_URL;
 $("name").value = stored.name || "";
 function notify(text) {
   $("notice").textContent = text;

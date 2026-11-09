@@ -18,6 +18,7 @@ try {
     ] });
     clients.push(app);
     const page = await app.firstWindow();
+    await page.waitForLoadState("load");
     await page.evaluate(() => {
       const Native = window.RTCPeerConnection;
       window.testConnections = [];

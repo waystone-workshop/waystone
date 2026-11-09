@@ -16,6 +16,7 @@ try {
     ],
   });
   const page = await application.firstWindow();
+  await page.waitForLoadState("load");
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.locator("#server").fill(origin);

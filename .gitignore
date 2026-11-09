@@ -50,3 +50,6 @@ npm-debug.log
 /backend/uploads/
 /voice/.runtime/
 /repositories/
+/deploy/mars/.env
+/deploy/mars/website/
+/deploy/mars/releases/

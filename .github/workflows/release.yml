@@ -21,6 +21,7 @@ jobs:
   desktop:
     needs: backend
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -42,6 +43,7 @@ jobs:
       - run: npm run package -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          WAYSTONE_SERVER_URL: https://mars.tail1d39aa.ts.net
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.os }}
@@ -52,8 +54,46 @@ jobs:
             frontend/release/*.zip
             frontend/release/*.yml
             frontend/release/*.blockmap
+  server:
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Linux backend image and deployment files
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          docker build -t "waystone-backend:$VERSION" backend
+          mkdir -p server-output
+          docker save "waystone-backend:$VERSION" | gzip > server-output/waystone-backend-linux-amd64.tar.gz
+          tar -czf server-output/waystone-mars-deploy.tar.gz -C deploy/mars .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-server
+          path: server-output/*
+  website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: waystone-workshop/waystone-website
+          ref: 13b380f935ea9dc01913f29e3e8d4fec54371f36
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+        env:
+          WINDOWS_DOWNLOAD_URL: https://github.com/waystone-workshop/waystone/releases/latest/download/Waystone-Setup.exe
+      - run: tar -czf waystone-website.tar.gz -C dist .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-website
+          path: waystone-website.tar.gz
   draft:
-    needs: desktop
+    needs: [desktop, server, website]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -69,6 +109,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
+          (cd artifacts && sha256sum * > SHA256SUMS)
           if gh release view "$TAG" >/dev/null 2>&1; then
             test "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true || { echo "Refusing to replace a published release"; exit 1; }
           else

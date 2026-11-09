@@ -1,0 +1,11 @@
+[Unit]
+Description=Deploy the latest published Waystone release
+Wants=network-online.target
+After=network-online.target docker.service tailscaled.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/waystone
+ExecStart=/bin/bash /opt/waystone/check-release.sh
+TimeoutStartSec=900
+UMask=0077

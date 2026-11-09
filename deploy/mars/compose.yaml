@@ -1,0 +1,47 @@
+name: waystone
+services:
+  backend:
+    image: waystone-backend:${WAYSTONE_VERSION:?Set WAYSTONE_VERSION}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PHX_SERVER: "true"
+      DATABASE_PATH: /data/waystone.db
+      PORT: "4000"
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 30s
+  website:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./website:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  voice:
+    image: livekit/livekit-server:v1.13.11
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        bind_addresses: [127.0.0.1, ${MARS_TAILSCALE_IP}]
+        rtc:
+          node_ip: ${MARS_TAILSCALE_IP:?Set Mars Tailscale IP}
+          tcp_port: 7881
+          udp_port: 7882
+          use_external_ip: false
+        keys:
+          ${LIVEKIT_API_KEY:?Set LiveKit key}: ${LIVEKIT_API_SECRET:?Set LiveKit secret}
+volumes:
+  data:
+    name: waystone-data
