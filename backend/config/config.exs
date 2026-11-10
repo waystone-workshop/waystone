@@ -7,6 +7,8 @@
 # General application configuration
 import Config
 
+config :phoenix, :filter_parameters, ["password", "current_password", "invite_code", "token"]
+
 config :waystone,
   ecto_repos: [Waystone.Repo],
   generators: [timestamp_type: :utc_datetime]

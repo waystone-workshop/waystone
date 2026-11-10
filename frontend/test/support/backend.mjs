@@ -41,6 +41,7 @@ export async function startBackend() {
     channels.map((channel) => [channel.id, makeBoard(channel)]),
   );
   const requests = [];
+  let user = { id: 1, username: "ada", display_name: "Ada", bio: "", avatar_color: "pine", role: "admin", inserted_at: "2026-11-01T12:00:00Z" };
   let websockets;
   const http = createServer(async (req, res) => {
     requests.push(req.url);
@@ -51,10 +52,24 @@ export async function startBackend() {
     let data;
     res.setHeader("Content-Type", "application/json");
     if (url.pathname === "/api/session")
-      data = { token: "test-token", name: params.name };
+      data = req.method === "DELETE" ? { signed_out: true } : { token: "test-token", name: user.display_name, user };
+    else if (url.pathname === "/api/register") {
+      user = { ...user, username: params.username.toLowerCase(), display_name: params.display_name, role: "member" };
+      res.statusCode = 201;
+      data = { token: "test-token", name: user.display_name, user };
+    }
     else if (req.headers.authorization !== "Bearer test-token") {
       res.statusCode = 401;
       data = { error: "Unauthorized" };
+    } else if (url.pathname === "/api/me") {
+      if (req.method === "PUT") user = { ...user, display_name: params.display_name, bio: params.bio, avatar_color: params.avatar_color };
+      data = user;
+    } else if (url.pathname === "/api/users") {
+      data = { users: [user, { ...user, id: 2, username: "grace", display_name: "Grace", role: "member" }] };
+    } else if (/^\/api\/users\/\d+$/.test(url.pathname)) {
+      data = user;
+    } else if (url.pathname === "/api/me/password") {
+      data = { signed_out: true };
     } else if (url.pathname === "/api/channels" && req.method === "POST") {
       data = {
         id: channels.length + 1,

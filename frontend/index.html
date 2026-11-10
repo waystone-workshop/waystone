@@ -33,6 +33,7 @@
         Open local Canvases →
       </button>
       <form id="join-form">
+        <label>Welcome back<select id="auth-mode"><option value="login">Sign in</option><option value="register">Create an account</option></select></label>
         <label
           >Mars backend address<input
             id="server"
@@ -41,20 +42,23 @@
             required
         /></label>
         <label
-          >Your name<input
+          >Username<input
             id="name"
             maxlength="24"
             required
-            autocomplete="nickname"
+            autocomplete="username"
         /></label>
-        <label
+        <label>Password<input id="password" type="password" required minlength="12" maxlength="128" autocomplete="current-password" /></label>
+        <label id="display-name-field" hidden>Display name<input id="display-name" maxlength="24" autocomplete="nickname" /></label>
+        <label id="invite-field" hidden
           >Invitation code<input
             id="invite"
             type="password"
-            autocomplete="current-password"
+            autocomplete="off"
         /></label>
-        <button class="primary">Join your friends →</button>
+        <button class="primary" id="auth-submit">Sign in →</button>
       </form>
+      <p id="auth-hint">Your account stays with you. Sign in with your username and password.</p>
       <small>Use http://localhost:4000 for local development.</small>
       <p><button id="check-updates" type="button">Check for updates</button></p>
     </section>
@@ -68,10 +72,11 @@
         </div>
 
         <button id="workspace-canvases">▧ Canvases</button>
+        <button id="members-open">Members</button>
         <nav id="channels" aria-label="Text channels"></nav>
         <div class="profile">
           <strong id="identity"></strong><span id="connection">Connecting…</span
-          ><button id="leave">Leave</button><button id="workspace-updates">Check for updates</button>
+          ><button id="profile-open">My profile</button><button id="leave">Sign out</button><button id="workspace-updates">Check for updates</button>
         </div>
       </aside>
       <section class="conversation">
@@ -128,6 +133,29 @@
         />
       </section>
     </main>
+    <dialog id="members-dialog" class="account-dialog">
+      <div class="section-title"><h2>Your party</h2><button data-close="members-dialog" aria-label="Close members">Close</button></div>
+      <p>Familiar faces, one shared space.</p><div id="members-list"></div>
+    </dialog>
+    <dialog id="public-profile-dialog" class="account-dialog">
+      <div id="public-profile"></div><button data-close="public-profile-dialog">Close</button>
+    </dialog>
+    <dialog id="profile-dialog" class="account-dialog">
+      <div class="section-title"><h2>Make yourself at home</h2><button data-close="profile-dialog">Close</button></div>
+      <p id="profile-account"></p>
+      <form id="profile-form">
+        <label>Display name<input id="profile-name" required maxlength="24" /></label>
+        <label>A little about you<textarea id="profile-bio" maxlength="280" rows="3" placeholder="Your next adventure, favorite game, or current obsession…"></textarea></label>
+        <label>Avatar color<select id="profile-color"><option value="pine">Pine</option><option value="amber">Amber</option><option value="slate">Slate</option><option value="berry">Berry</option></select></label>
+        <button class="primary">Save profile</button>
+      </form>
+      <hr /><h3>Change password</h3><p>Changing your password signs you out on all devices.</p>
+      <form id="password-form">
+        <label>Current password<input id="current-password" type="password" required maxlength="128" autocomplete="current-password" /></label>
+        <label>New password<input id="new-password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
+        <button>Change password and sign out</button>
+      </form>
+    </dialog>
     <dialog id="channel-dialog">
       <form id="channel-form">
         <h2>A new conversation</h2>

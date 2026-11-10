@@ -5,7 +5,7 @@ defmodule WaystoneWeb.ChatChannelTest do
 
   test "socket requires a token and receives only its channel's messages" do
     assert :error = connect(WaystoneWeb.UserSocket, %{})
-    token = Phoenix.Token.sign(@endpoint, "desktop", "Ada")
+    token = Waystone.AccountsFixtures.token()
     {:ok, socket} = connect(WaystoneWeb.UserSocket, %{"token" => token})
     {:ok, channel} = Waystone.Chat.create_channel(%{name: "socket-room"})
     {:ok, other} = Waystone.Chat.create_channel(%{name: "elsewhere"})

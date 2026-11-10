@@ -6,7 +6,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 const origin = process.env.WAYSTONE_TEST_SERVER || "http://localhost:4000";
+const usernames = [process.env.WAYSTONE_TEST_USERNAME, process.env.WAYSTONE_TEST_USERNAME_2];
+const passwords = [process.env.WAYSTONE_TEST_PASSWORD, process.env.WAYSTONE_TEST_PASSWORD_2];
+if (usernames.some((value) => !value) || passwords.some((value) => !value))
+  throw new Error("Set WAYSTONE_TEST_USERNAME/PASSWORD and WAYSTONE_TEST_USERNAME_2/PASSWORD_2 for two existing test accounts; the first needs moderator or admin role.");
 const clients = [], profiles = [];
+let clientIndex = 0;
 try {
   for (const name of ["Audio test Ada", "Audio test Grace"]) {
     const profile = await mkdtemp(join(tmpdir(), "waystone-audio-"));
@@ -27,8 +32,9 @@ try {
       };
     });
     await page.locator("#server").fill(origin);
-    await page.locator("#name").fill(name);
-    await page.locator("#invite").fill(process.env.WAYSTONE_TEST_INVITE || "");
+    await page.locator("#name").fill(usernames[clientIndex]);
+    await page.locator("#password").fill(passwords[clientIndex]);
+    clientIndex++;
     await page.locator("#join-form button").click();
     await expect(page.locator("#join-audio")).toBeEnabled();
     await page.locator("#join-audio").click();
@@ -50,7 +56,7 @@ try {
   await pages[0].screenshot({ path: fileURLToPath(new URL("../../tmp/audio-call.png", import.meta.url)) });
   await pages[0].locator("#call-mute").click();
   await expect(pages[0].locator("#call-mute")).toHaveText("Unmute");
-  await expect(pages[1].locator("#call-participants")).toContainText("Audio test Ada · muted");
+  await expect(pages[1].locator("#call-participants")).toContainText("· muted");
   await pages[1].locator("#call-deafen").click();
   expect(await pages[1].locator("#call-audio audio").evaluate((audio) => audio.muted)).toBe(true);
   // Changing text channels must release the current room and microphone.

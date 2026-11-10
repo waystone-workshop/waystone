@@ -132,6 +132,7 @@ defmodule Waystone.Chat do
         id: m.id,
         channel_id: m.channel_id,
         author: m.author,
+        user_id: m.user_id,
         body: m.body,
         inserted_at: m.inserted_at,
         attachments:
@@ -148,9 +149,15 @@ defmodule Waystone.Chat do
   def send_message(channel_id, author, attrs) do
     get_channel!(channel_id)
 
+    {name, user_id} =
+      case author do
+        %Waystone.Accounts.User{} = user -> {user.display_name, user.id}
+        name when is_binary(name) -> {name, nil}
+      end
+
     with {:ok, attachments} <- Waystone.Chat.Attachments.validate(attrs["attachments"] || []) do
-      %Message{channel_id: channel_id, attachments: attachments}
-      |> Message.changeset(%{author: author, body: attrs["body"] || ""})
+      %Message{channel_id: channel_id, attachments: attachments, user_id: user_id}
+      |> Message.changeset(%{author: name, body: attrs["body"] || ""})
       |> Repo.insert()
       |> case do
         {:ok, message} ->
@@ -168,6 +175,7 @@ defmodule Waystone.Chat do
       id: message.id,
       channel_id: message.channel_id,
       author: message.author,
+      user_id: message.user_id,
       body: message.body || "",
       attachments: Enum.map(message.attachments, &Map.drop(&1, ["data"])),
       inserted_at: message.inserted_at

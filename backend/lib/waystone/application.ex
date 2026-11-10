@@ -10,6 +10,7 @@ defmodule Waystone.Application do
     children = [
       WaystoneWeb.Telemetry,
       Waystone.Repo,
+      {Waystone.Accounts.AuthLimiter, name: Waystone.Accounts.AuthLimiter},
       {Ecto.Migrator,
        repos: Application.fetch_env!(:waystone, :ecto_repos), skip: skip_migrations?()},
       {Phoenix.PubSub, name: Waystone.PubSub},

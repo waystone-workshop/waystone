@@ -31,6 +31,13 @@ defmodule Waystone.MigrationTest do
 
     assert [[42, "Ada", "Original idea", "2026-10-30 21:45:00", "general", "[]"]] = result.rows
 
+    assert [[nil]] =
+             Ecto.Adapters.SQL.query!(
+               MigrationRepo,
+               "SELECT user_id FROM messages WHERE id = 42",
+               []
+             ).rows
+
     boards =
       Ecto.Adapters.SQL.query!(MigrationRepo, "SELECT id, channel_id FROM channel_boards", []).rows
 

@@ -11,6 +11,7 @@ defmodule Waystone.Chat.Message do
     field :author, :string
     field :body, :string
     belongs_to :channel, Waystone.Chat.Channel
+    belongs_to :user, Waystone.Accounts.User
     field :attachments, {:array, :map}, default: []
 
     timestamps(type: :utc_datetime)

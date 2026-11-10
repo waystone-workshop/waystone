@@ -3,7 +3,7 @@ defmodule WaystoneWeb.ApiTest do
   alias Waystone.Chat
 
   defp authenticated(conn) do
-    token = Phoenix.Token.sign(WaystoneWeb.Endpoint, "desktop", "Ada")
+    token = Waystone.AccountsFixtures.token()
     put_req_header(conn, "authorization", "Bearer " <> token)
   end
 
@@ -29,13 +29,23 @@ defmodule WaystoneWeb.ApiTest do
     end)
 
     assert conn
-           |> post("/api/session", %{name: "Ada", invite_code: "wrong"})
+           |> post("/api/register", %{
+             username: "ada",
+             display_name: "Ada",
+             password: "long-password-123",
+             invite_code: "wrong"
+           })
            |> json_response(401)
 
     assert %{"token" => token} =
              conn
-             |> post("/api/session", %{name: "Ada", invite_code: "friends-only"})
-             |> json_response(200)
+             |> post("/api/register", %{
+               username: "ada",
+               display_name: "Ada",
+               password: "long-password-123",
+               invite_code: "friends-only"
+             })
+             |> json_response(201)
 
     assert is_binary(token)
   end
