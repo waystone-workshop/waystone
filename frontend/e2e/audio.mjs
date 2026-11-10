@@ -28,6 +28,7 @@ try {
     });
     await page.locator("#server").fill(origin);
     await page.locator("#name").fill(name);
+    await page.locator("#invite").fill(process.env.WAYSTONE_TEST_INVITE || "");
     await page.locator("#join-form button").click();
     await expect(page.locator("#join-audio")).toBeEnabled();
     await page.locator("#join-audio").click();

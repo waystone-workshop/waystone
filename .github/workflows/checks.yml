@@ -1,5 +1,9 @@
 name: Checks and desktop installers
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 jobs:
   backend:
     runs-on: ubuntu-latest
