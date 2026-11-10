@@ -7,7 +7,11 @@ defmodule WaystoneWeb.UserSocket do
   def connect(%{"token" => token}, socket, _connect_info) do
     case Waystone.Accounts.authenticate(token) do
       {:ok, user} ->
-        {:ok, socket |> assign(:author, user.display_name) |> assign(:session_token, token)}
+        {:ok,
+         socket
+         |> assign(:author, user.display_name)
+         |> assign(:user_id, user.id)
+         |> assign(:session_token, token)}
 
       _ ->
         :error

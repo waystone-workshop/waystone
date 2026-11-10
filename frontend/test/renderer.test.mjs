@@ -193,7 +193,7 @@ test("renderer sends text, pictures and drawings, exports a range, and restores 
     $("body").dispatchEvent(new w.Event("input"));
     $("channel-name").value = "planning";
     submit("channel-form");
-    await poll(() => $("channel-title").textContent === "# planning");
+    await poll(() => $("channel-title").textContent === "Planning");
     assert.equal($("body").value, "");
     $("channels").querySelector("button").click();
     await poll(() => $("body").value === "Keep this draft");
@@ -246,7 +246,7 @@ test("renderer sends text, pictures and drawings, exports a range, and restores 
     });
     await poll(
       () =>
-        $("channel-title").textContent === "# planning" &&
+        $("channel-title").textContent === "Planning" &&
         !$("board-dialog").open,
     );
     assert.equal(canvasObjects.has(owned.id), false);

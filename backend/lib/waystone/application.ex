@@ -14,6 +14,7 @@ defmodule Waystone.Application do
       {Ecto.Migrator,
        repos: Application.fetch_env!(:waystone, :ecto_repos), skip: skip_migrations?()},
       {Phoenix.PubSub, name: Waystone.PubSub},
+      WaystoneWeb.Presence,
       # Start a worker by calling: Waystone.Worker.start_link(arg)
       # {Waystone.Worker, arg},
       # Start to serve requests, typically the last entry

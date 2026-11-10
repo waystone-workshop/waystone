@@ -1,12 +1,16 @@
 import policy from "../policy.cjs";
 import { setupCanvases } from "./canvases.js";
-import { Socket } from "phoenix";
+import { Socket, Presence } from "phoenix";
+import { icon, mountIcons } from "./icons.mjs";
 import { Room, RoomEvent } from "livekit-client";
 import { AudioCall } from "./audio.mjs";
 import { setupUpdates } from "./updates.mjs";
 import { setupProfiles } from "./profiles.mjs";
 import { mergeMessages, rangeQuery } from "./context.mjs";
 const $ = (id) => document.getElementById(id);
+mountIcons(document);
+let directory, activeVoiceRoom = null, voiceRooms = [], voiceState = { state: "idle", participants: [] }, lastVoiceState = null;
+let spaces = [];
 let server,
   currentUser,
   token,
@@ -47,11 +51,39 @@ function applyUser(user) {
   currentUser = user;
   name = user.display_name;
   $("identity").textContent = `${name} · ${user.role}`;
+  $("self-avatar").replaceChildren(profiles.avatar(user));
   const manages = ["admin", "moderator"].includes(user.role);
   $("add-channel").hidden = !manages;
   $("delete-channel").hidden = !manages;
+  $("add-voice-room").hidden = !manages;
 }
 const profiles = setupProfiles({ document, api, changed: applyUser, signedOut: () => signOut(false), report });
+const peoplePreference = localStorage.getItem("waystone-people-open") !== "false";
+function setPeopleOpen(open) {
+  $("people-panel").hidden = !open;
+  $("workspace").classList.toggle("people-collapsed", !open);
+  $("members-toggle").setAttribute("aria-expanded", String(open));
+  localStorage.setItem("waystone-people-open", String(open));
+}
+setPeopleOpen(peoplePreference);
+$("members-toggle").onclick = () => setPeopleOpen($("people-panel").hidden);
+$("members-collapse").onclick = () => setPeopleOpen(false);
+$("settings-open").onclick = () => $("settings-dialog").showModal();
+$("settings-profile").onclick = () => $("profile-open").click();
+$("space-open").onclick = () => { $("space-search").value = ""; renderSpaces(); $("space-dialog").showModal(); $("space-search").focus(); };
+$("space-search").oninput = renderSpaces;
+function spaceLabel(space) { return space.name === "general" ? "The Common Room" : space.name.replaceAll("-", " ").replace(/^./, (letter) => letter.toUpperCase()); }
+function renderSpaces() {
+  const query = $("space-search").value.trim().toLowerCase();
+  const filtered = spaces.filter((space) => `${space.name} ${spaceLabel(space)}`.toLowerCase().includes(query));
+  $("space-no-results").hidden = filtered.length > 0;
+  $("channels").replaceChildren(...filtered.map((space) => {
+    const button = el("button", spaceLabel(space));
+    button.dataset.id = space.id; button.classList.toggle("active", space.id === channelId);
+    button.onclick = async () => { try { await switchChannel(space); $("space-dialog").close(); } catch (error) { report(error); } };
+    return button;
+  }));
+}
 $("auth-mode").onchange = () => {
   const register = $("auth-mode").value === "register";
   $("display-name-field").hidden = !register;
@@ -67,31 +99,78 @@ const call = new AudioCall({
     publishDefaults: { audioPreset: { maxBitrate: 32000 }, dtx: true, red: true },
   }),
   events: RoomEvent,
-  credentials: (id) => api(`/channels/${id}/call`, { method: "POST" }),
+  credentials: (id) => api(`/voice-rooms/${id}/call`, { method: "POST" }),
   audioHost: $("call-audio"),
   failed: report,
   changed: ({ state, muted, deafened, participants, playbackBlocked }) => {
+    voiceState = { state, muted, deafened, participants, playbackBlocked };
     const idle = state === "idle";
     $("join-audio").hidden = !idle;
-    $("join-audio").disabled = !channelId;
+    $("join-audio").disabled = false;
     $("call-panel").hidden = idle;
     $("call-state").textContent = state === "joining" ? "Connecting audio…"
       : state === "reconnecting" ? "Reconnecting audio…" : "Audio connected";
-    $("call-channel").textContent = channelName ? `# ${channelName}` : "";
-    $("call-mute").textContent = muted ? "Unmute" : "Mute mic";
+    $("call-channel").textContent = activeVoiceRoom?.name.replaceAll("-", " ") || "Voice";
+    $("call-count").textContent = participants.length ? `· ${participants.length}` : "";
+    $("call-mute").innerHTML = icon(muted ? "muted" : "mic");
+    $("call-mute").setAttribute("aria-label", muted ? "Unmute microphone" : "Mute microphone");
+    $("call-mute").title = muted ? "Unmute microphone" : "Mute microphone";
     $("call-mute").setAttribute("aria-pressed", String(muted));
     $("call-mute").disabled = state !== "connected";
     $("call-deafen").textContent = deafened ? "Enable sound" : "Deafen";
     $("call-deafen").setAttribute("aria-pressed", String(deafened));
     $("call-resume").hidden = !playbackBlocked;
     $("call-participants").replaceChildren(...participants.map((person) => {
-      const item = el("li", `${person.name}${person.self ? " (you)" : ""}${person.muted ? " · muted" : ""}`);
+      const item = el("li");
+      const label = el("button", `${person.name}${person.self ? " (you)" : ""}${person.muted ? " · muted" : ""}`);
+      label.onclick = () => { if (person.user_id) profiles.show(person.user_id, label); };
+      label.disabled = !person.user_id; item.append(label);
       item.classList.toggle("speaking", Boolean(person.speaking));
       return item;
     }));
+    pushVoicePresence();
   },
 });
-$("join-audio").onclick = () => { if (channelId) call.join(channelId); };
+async function loadVoiceRooms() {
+  const session = token;
+  const result = await api("/voice-rooms");
+  if (session !== token || !token) return;
+  voiceRooms = result.rooms; profiles.setRooms(voiceRooms);
+  if (activeVoiceRoom && !voiceRooms.some((room) => room.id === activeVoiceRoom.id)) { call.leave(); activeVoiceRoom = null; }
+  $("voice-rooms").replaceChildren(...voiceRooms.map((room) => {
+    const row = el("div", undefined, "voice-room-row");
+    const join = el("button", undefined, "voice-room-choice");
+    const mark = el("span"); mark.innerHTML = icon("headphones");
+    join.append(mark, el("strong", room.name.replaceAll("-", " ")), el("small", activeVoiceRoom?.id === room.id && voiceState.state !== "idle" ? "Connected" : "Join voice"));
+    join.onclick = async () => {
+      if (activeVoiceRoom?.id === room.id && voiceState.state !== "idle") { $("voice-dialog").close(); return; }
+      if (voiceState.state !== "idle" && !confirm(`Leave ${activeVoiceRoom?.name} and join ${room.name}?`)) return;
+      call.leave(); activeVoiceRoom = room; $("voice-dialog").close(); await call.join(room.id);
+    }; row.append(join);
+    if (["admin", "moderator"].includes(currentUser?.role)) {
+      const remove = el("button", "Delete", "voice-room-delete");
+      remove.setAttribute("aria-label", `Delete voice room ${room.name}`);
+      remove.onclick = async () => { if (!confirm(`Delete voice room ${room.name}? Connected users will leave the room.`)) return; try { await api(`/voice-rooms/${room.id}`, { method: "DELETE" }); await loadVoiceRooms(); } catch (error) { report(error); } };
+      row.append(remove);
+    }
+    return row;
+  }));
+  if (!voiceRooms.length) $("voice-rooms").append(el("p", "No voice rooms yet. A moderator can create one.", "subtle"));
+}
+async function showVoiceRooms() { try { await loadVoiceRooms(); $("voice-dialog").showModal(); } catch (error) { report(error); } }
+$("join-audio").onclick = showVoiceRooms;
+$("voice-switch").onclick = () => { $("call-details").open = false; showVoiceRooms(); };
+$("add-voice-room").onclick = () => { $("voice-dialog").close(); $("voice-create-dialog").showModal(); };
+$("voice-create-form").onsubmit = async (event) => {
+  event.preventDefault(); const button = event.currentTarget.querySelector(".primary"); button.disabled = true;
+  try { await api("/voice-rooms", { method: "POST", body: { name: $("voice-room-name").value } }); $("voice-create-dialog").close(); $("voice-room-name").value = ""; await showVoiceRooms(); } catch (error) { report(error); } finally { button.disabled = false; }
+};
+function pushVoicePresence() {
+  if (!directory || directory.state !== "joined") return;
+  const meta = { voice_room_id: ["connected", "reconnecting"].includes(voiceState.state) ? activeVoiceRoom?.id || null : null, muted: Boolean(voiceState.muted), speaking: Boolean(voiceState.participants.find((person) => person.self)?.speaking) };
+  const key = JSON.stringify(meta); if (key === lastVoiceState) return;
+  lastVoiceState = key; directory.push("voice_state", meta);
+}
 $("call-leave").onclick = () => call.leave();
 $("call-mute").onclick = () => call.mute();
 $("call-deafen").onclick = () => call.deafen();
@@ -112,6 +191,17 @@ $("body").addEventListener("input", () => {
   saveDraft();
   $("draft-status").textContent = "Draft saved locally";
 });
+document.addEventListener("waystone-board-view", ({ detail }) => {
+  $("conversation-view").classList.toggle("active", !detail.embedded);
+  $("conversation-view").setAttribute("aria-pressed", String(!detail.embedded));
+  $("open-channel-board").classList.toggle("active", detail.embedded);
+  $("open-channel-board").setAttribute("aria-pressed", String(detail.embedded));
+});
+$("board-dialog").addEventListener("close", () => {
+  $("conversation-view").classList.add("active"); $("conversation-view").setAttribute("aria-pressed", "true");
+  $("open-channel-board").classList.remove("active"); $("open-channel-board").setAttribute("aria-pressed", "false");
+});
+$("conversation-view").onclick = () => { if ($("board-dialog").open) $("board-close").click(); };
 $("join-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = event.submitter || $("join-form").querySelector("button");
@@ -138,13 +228,18 @@ $("join-form").addEventListener("submit", async (event) => {
     });
     socket.onClose(() => {
       $("connection").textContent = "Reconnecting…";
+      profiles.setPresence({}, false);
     });
     socket.onError(() => {
       $("connection").textContent = "Connection interrupted";
     });
     socket.connect();
     await loadChannels();
-    const directory = socket.channel("directory", {});
+    directory = socket.channel("directory", {});
+    const presence = new Presence(directory);
+    presence.onSync(() => { profiles.setPresence(presence.state); pushVoicePresence(); });
+    directory.on("profile_updated", () => profiles.refresh().catch(report));
+    directory.on("voice_rooms_updated", () => loadVoiceRooms().catch(report));
     directory.on("channel_created", () => loadChannels().catch(report));
     directory.on("channel_deleted", () => loadChannels().catch(report));
     directory.on("board_updated", (event) => {
@@ -153,7 +248,9 @@ $("join-form").addEventListener("submit", async (event) => {
           "The channel board was updated. Open it again to load the latest saved version.",
         );
     });
-    directory.join().receive("ok", () => loadChannels().catch(report));
+    directory.join().receive("ok", () => { lastVoiceState = null; loadChannels().catch(report); profiles.refresh().catch(report); });
+    await profiles.refresh();
+    await loadVoiceRooms();
     $("join").hidden = true;
     $("workspace").hidden = false;
     notify("");
@@ -179,24 +276,15 @@ async function loadChannels() {
     localStorage.removeItem(draftKey());
     resetChannel();
   }
-  $("channels").replaceChildren(
-    ...result.channels.map((channel) => {
-      const button = el("button", "#  " + channel.name);
-      button.dataset.id = channel.id;
-      button.onclick = () => switchChannel(channel).catch(report);
-      return button;
-    }),
-  );
+  spaces = result.channels; renderSpaces();
   if (!channelId && result.channels.length)
     await switchChannel(result.channels[0]);
 }
 function resetChannel() {
-  call.leave();
   subscription?.leave();
   subscription = null;
   generation++;
   channelId = null;
-  $("join-audio").disabled = true;
   channelName = null;
   channelBoardId = null;
   messages = [];
@@ -258,6 +346,8 @@ $("delete-channel").onclick = async () => {
   }
 };
 async function switchChannel(channel) {
+  if (channelId === channel.id) return;
+  if ($("board-dialog").open) { $("board-close").click(); if ($("board-dialog").open) return; }
   if (sending) return notify("Wait for your message to finish sending.");
   if (
     pending.length &&
@@ -267,7 +357,6 @@ async function switchChannel(channel) {
   )
     return;
   saveDraft();
-  call.leave();
   subscription?.leave();
   generation++;
   const version = generation;
@@ -287,7 +376,7 @@ async function switchChannel(channel) {
   pending = [];
   $("body").value = localStorage.getItem(draftKey()) || "";
   renderPending();
-  $("channel-title").textContent = "# " + channel.name;
+  $("channel-title").textContent = spaceLabel(channel);
   $("channels")
     .querySelectorAll("button")
     .forEach((button) =>
@@ -365,10 +454,14 @@ function renderMessages() {
       const content = el("div", undefined, "message-content");
       const meta = el("div", undefined, "meta");
       const author = el(message.user_id ? "button" : "strong", message.author);
-      if (message.user_id) { author.className = "author-profile"; author.onclick = () => profiles.show(message.user_id); }
+      if (message.user_id) { author.className = "author-profile"; author.onclick = () => profiles.show(message.user_id, author); }
+      const date = new Date(message.inserted_at);
+      const today = date.toDateString() === new Date().toDateString();
+      const time = el("time", today ? date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
+      time.dateTime = message.inserted_at; time.title = date.toLocaleString();
       meta.append(
         author,
-        el("time", new Date(message.inserted_at).toLocaleString()),
+        time,
         el("span", "#" + message.id),
       );
       content.append(meta, el("p", message.body));
@@ -423,7 +516,10 @@ function renderMessages() {
         content.append(image);
         queueMicrotask(load);
       }
-      row.append(check, content);
+      const portrait = el(message.user_id ? "button" : "span", undefined, "message-avatar");
+      portrait.append(profiles.avatar(profiles.get(message.user_id) || { display_name: message.author, avatar_color: "slate" }));
+      if (message.user_id) { portrait.setAttribute("aria-label", `View ${message.author}'s profile`); portrait.onclick = () => profiles.show(message.user_id, portrait); }
+      row.append(check, portrait, content);
       return row;
     }),
   );
@@ -445,7 +541,7 @@ $("older").onclick = async () => {
     report(error);
   }
 };
-$("add-channel").onclick = () => $("channel-dialog").showModal();
+$("add-channel").onclick = () => { $("space-dialog").close(); $("channel-dialog").showModal(); };
 $("channel-form").onsubmit = async (event) => {
   event.preventDefault();
   try {
@@ -462,7 +558,7 @@ $("channel-form").onsubmit = async (event) => {
 };
 $("composer").onsubmit = async (event) => {
   event.preventDefault();
-  if (!channelId || sending) return;
+  if (!channelId || sending || (!$("body").value.trim() && !pending.length)) return;
   sending = true;
   $("send").disabled = true;
   $("body").disabled = true;
@@ -674,6 +770,10 @@ document
   );
 async function signOut(revoke = true) {
   if (revoke && sending) return notify("Wait for your message to finish sending.");
+  if ($("board-dialog").open) {
+    if (revoke) { $("board-close").click(); if ($("board-dialog").open) return; }
+    else $("board-dialog").close();
+  }
   if (revoke && token) {
     try { await api("/session", { method: "DELETE" }); }
     catch (error) { report(error); return; }
@@ -683,7 +783,8 @@ async function signOut(revoke = true) {
   socket?.disconnect();
   token = null;
   currentUser = null;
-  for (const id of ["profile-dialog", "members-dialog", "public-profile-dialog"]) $(id).close();
+  profiles.clear(); directory = null; activeVoiceRoom = null; lastVoiceState = null; voiceRooms = []; spaces = [];
+  for (const id of ["profile-dialog", "members-dialog", "public-profile-dialog", "settings-dialog", "space-dialog", "voice-dialog", "voice-create-dialog"]) $(id).close();
   $("password-form").reset();
   subscription = null;
   generation++;

@@ -8,6 +8,10 @@ defmodule Waystone.Accounts.User do
     field :display_name, :string
     field :bio, :string, default: ""
     field :avatar_color, :string, default: "pine"
+    field :avatar_version, :string
+    field :avatar_content_type, :string
+    field :banner_version, :string
+    field :banner_content_type, :string
     field :password_hash, :string, redact: true
     field :password, :string, virtual: true, redact: true
     field :role, :string, default: "member"

@@ -61,6 +61,8 @@ export async function startBackend() {
     else if (req.headers.authorization !== "Bearer test-token") {
       res.statusCode = 401;
       data = { error: "Unauthorized" };
+    } else if (url.pathname === "/api/voice-rooms") {
+      data = { rooms: [{ id: 1, name: "campfire" }] };
     } else if (url.pathname === "/api/me") {
       if (req.method === "PUT") user = { ...user, display_name: params.display_name, bio: params.bio, avatar_color: params.avatar_color };
       data = user;
@@ -152,6 +154,7 @@ export async function startBackend() {
         id: messages.length + 1,
         channel_id: Number(url.pathname.split("/")[3]),
         author: "Ada",
+        user_id: user.id,
         body: params.body,
         attachments: params.attachments.map((a, i) => ({
           id: `image-${messages.length}-${i}`,
@@ -196,6 +199,10 @@ export async function startBackend() {
             { status: "ok", response: {} },
           ]),
         );
+      if (event === "phx_join" && topic === "directory") ws.send(JSON.stringify([null, null, "directory", "presence_state", {
+        1: { metas: [{ phx_ref: "mock-one", voice_room_id: null }] },
+        2: { metas: [{ phx_ref: "mock-two", voice_room_id: null }] },
+      }]));
     }),
   );
   await new Promise((resolve) => http.listen(0, "127.0.0.1", resolve));

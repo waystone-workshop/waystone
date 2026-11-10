@@ -297,7 +297,13 @@ export function setupBoards({
     $("board-title").value = draft.title;
     $("board-feedback").textContent = "";
     render();
-    $("board-dialog").showModal();
+    const dialog = $("board-dialog");
+    const workspace = $("workspace");
+    const embedded = Boolean(object?.channel && workspace && !workspace.hidden);
+    dialog.classList.toggle("is-embedded", embedded);
+    if (embedded) document.querySelector(".conversation").append(dialog);
+    if (embedded && typeof dialog.show === "function") dialog.show(); else dialog.showModal();
+    document.dispatchEvent(new CustomEvent("waystone-board-view", { detail: { open: true, embedded } }));
   }
   const snapshotObject = (value) => structuredClone(value);
   async function save() {
