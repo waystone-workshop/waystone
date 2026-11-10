@@ -162,7 +162,8 @@ export function setupProfiles({ document, api, changed, signedOut, report }) {
       const file = event.target.files[0]; if (!file) return;
       event.target.disabled = true;
       try {
-        if (file.size > (kind === "avatar" ? 1 : 2) * 1024 * 1024) throw Error(`${kind === "avatar" ? "Avatar" : "Banner"} is too large.`);
+        const maxMB = kind === "avatar" ? 10 : 20;
+        if (file.size > maxMB * 1024 * 1024) throw Error(`${kind === "avatar" ? "Avatar" : "Banner"} must be ${maxMB} MB or smaller.`);
         const data = await new Promise((resolve, reject) => {
           const reader = new document.defaultView.FileReader(); reader.onerror = () => reject(Error("Could not read image")); reader.onload = () => resolve(reader.result.split(",")[1]); reader.readAsDataURL(file);
         });

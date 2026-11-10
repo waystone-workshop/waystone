@@ -131,25 +131,22 @@ defmodule Waystone.Accounts do
   def media(_, _), do: nil
 
   def set_media(user, kind, data) when kind in ["avatar", "banner"] do
-    max_bytes = if kind == "avatar", do: 1_048_576, else: 2_097_152
+    max_bytes = if kind == "avatar", do: 10 * 1024 * 1024, else: 20 * 1024 * 1024
 
-    with true <- is_binary(data) and byte_size(data) <= div(max_bytes * 4, 3) + 4,
-         {:ok, [image]} <- Waystone.Chat.Attachments.validate([%{"data" => data}]),
-         {:ok, bytes} <- Base.decode64(image["data"]),
-         true <- byte_size(bytes) <= max_bytes do
+    with {:ok, bytes, content_type, _ext} <- Waystone.Media.decode_image(data, max_bytes) do
       Repo.transaction(fn ->
         Repo.insert!(
           %Waystone.Accounts.ProfileMedia{
             user_id: user.id,
             kind: kind,
             data: bytes,
-            content_type: image["content_type"]
+            content_type: content_type
           },
           on_conflict: {:replace, [:data, :content_type]},
           conflict_target: [:user_id, :kind]
         )
 
-        fields = media_fields(kind, Ecto.UUID.generate(), image["content_type"])
+        fields = media_fields(kind, Ecto.UUID.generate(), content_type)
         user |> Ecto.Changeset.change(fields) |> Repo.update!()
       end)
     else

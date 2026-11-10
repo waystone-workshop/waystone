@@ -42,7 +42,7 @@ defmodule WaystoneWeb.HangoutTest do
     for data <- [
           "invalid",
           Base.encode64("<svg onload='alert(1)'/>"),
-          String.duplicate("A", 1_398_108)
+          String.duplicate("A", 13_981_020)
         ] do
       authenticated |> put("/api/me/media/avatar", %{data: data}) |> json_response(422)
     end

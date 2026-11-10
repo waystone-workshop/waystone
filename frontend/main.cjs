@@ -77,7 +77,7 @@ app.whenReady().then(() => {
       const response = await fetch(base + path, {
         method: verb,
         redirect: "error",
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(verb === "PUT" && /^\/api\/me\/media\/(avatar|banner)$/.test(path) ? 180000 : 60000),
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(body ? { "Content-Type": "application/json" } : {}),
