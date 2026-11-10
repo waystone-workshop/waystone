@@ -88,6 +88,7 @@ defmodule Waystone.MixProject do
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind waystone", "esbuild waystone"],
       "assets.deploy": [
+        "compile",
         "tailwind waystone --minify",
         "esbuild waystone --minify",
         "phx.digest"
