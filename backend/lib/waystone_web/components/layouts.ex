@@ -41,7 +41,7 @@ defmodule WaystoneWeb.Layouts do
       <main class="flex min-h-0 flex-1 flex-col">
         {render_slot(@inner_block)}
       </main>
-       <.flash_group flash={@flash} />
+      <.flash_group flash={@flash} />
     </div>
     """
   end
@@ -74,7 +74,7 @@ defmodule WaystoneWeb.Layouts do
         {gettext("Attempting to reconnect")}
         <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
       </.flash>
-      
+
       <.flash
         id="server-error"
         kind={:error}
@@ -109,7 +109,7 @@ defmodule WaystoneWeb.Layouts do
       >
         <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
       </button>
-      
+
       <button
         class="flex p-2 cursor-pointer w-1/3"
         phx-click={JS.dispatch("phx:set-theme")}
@@ -117,7 +117,7 @@ defmodule WaystoneWeb.Layouts do
       >
         <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
       </button>
-      
+
       <button
         class="flex p-2 cursor-pointer w-1/3"
         phx-click={JS.dispatch("phx:set-theme")}

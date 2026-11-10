@@ -4,9 +4,11 @@ import { Socket } from "phoenix";
 import { Room, RoomEvent } from "livekit-client";
 import { AudioCall } from "./audio.mjs";
 import { setupUpdates } from "./updates.mjs";
+import { setupProfiles } from "./profiles.mjs";
 import { mergeMessages, rangeQuery } from "./context.mjs";
 const $ = (id) => document.getElementById(id);
 let server,
+  currentUser,
   token,
   name,
   socket,
@@ -33,6 +35,7 @@ function notify(text) {
   $("notice").textContent = text;
 }
 function report(error) {
+  if (error.message.includes("Please sign in again.")) signOut(false);
   notify(
     error.message.replace(/^Error invoking remote method '[^']+': Error: /, ""),
   );
@@ -40,6 +43,24 @@ function report(error) {
 setupUpdates(window.waystone, document, report);
 const api = (path, options = {}) =>
   window.waystone.request({ server, token, path: "/api" + path, ...options });
+function applyUser(user) {
+  currentUser = user;
+  name = user.display_name;
+  $("identity").textContent = `${name} · ${user.role}`;
+  const manages = ["admin", "moderator"].includes(user.role);
+  $("add-channel").hidden = !manages;
+  $("delete-channel").hidden = !manages;
+}
+const profiles = setupProfiles({ document, api, changed: applyUser, signedOut: () => signOut(false), report });
+$("auth-mode").onchange = () => {
+  const register = $("auth-mode").value === "register";
+  $("display-name-field").hidden = !register;
+  $("invite-field").hidden = !register;
+  $("invite").required = register;
+  $("password").autocomplete = register ? "new-password" : "current-password";
+  $("auth-submit").textContent = register ? "Create account →" : "Sign in →";
+  $("auth-hint").textContent = register ? "Use your invitation code once to join. Passwords need at least 12 characters." : "Sign in with your username and password.";
+};
 const call = new AudioCall({
   createRoom: () => new Room({
     audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -82,7 +103,7 @@ function el(tag, text, className) {
   return node;
 }
 function draftKey() {
-  return `draft:${server}:${name}:${channelId}`;
+  return `draft:${server}:${currentUser?.id || name}:${channelId}`;
 }
 function saveDraft() {
   if (channelId) localStorage.setItem(draftKey(), $("body").value);
@@ -97,17 +118,18 @@ $("join-form").addEventListener("submit", async (event) => {
   button.disabled = true;
   try {
     server = policy.validateServer($("server").value.trim());
-    const result = await api("/session", {
-      body: { name: $("name").value, invite_code: $("invite").value },
+    const register = $("auth-mode").value === "register";
+    const result = await api(register ? "/register" : "/session", {
+      body: { username: $("name").value, password: $("password").value, display_name: $("display-name").value.trim() || $("name").value, invite_code: register ? $("invite").value : undefined },
     });
     token = result.token;
-    name = result.name;
+    applyUser(result.user);
     $("invite").value = "";
+    $("password").value = "";
     localStorage.setItem(
       "waystone-preferences",
-      JSON.stringify({ server, name }),
+      JSON.stringify({ server, name: result.user.username }),
     );
-    $("identity").textContent = name;
     socket = new Socket(server.replace(/^http/, "ws") + "/socket", {
       params: { token },
     });
@@ -327,7 +349,7 @@ function renderMessages() {
       const row = el(
         "article",
         undefined,
-        message.author === name ? "message mine" : "message",
+        message.user_id === currentUser?.id ? "message mine" : "message",
       );
       row.dataset.id = message.id;
       const check = el("input");
@@ -342,8 +364,10 @@ function renderMessages() {
       };
       const content = el("div", undefined, "message-content");
       const meta = el("div", undefined, "meta");
+      const author = el(message.user_id ? "button" : "strong", message.author);
+      if (message.user_id) { author.className = "author-profile"; author.onclick = () => profiles.show(message.user_id); }
       meta.append(
-        el("strong", message.author),
+        author,
         el("time", new Date(message.inserted_at).toLocaleString()),
         el("span", "#" + message.id),
       );
@@ -648,12 +672,19 @@ document
   .forEach(
     (button) => (button.onclick = () => $(button.dataset.close).close()),
   );
-$("leave").onclick = () => {
+async function signOut(revoke = true) {
+  if (revoke && sending) return notify("Wait for your message to finish sending.");
+  if (revoke && token) {
+    try { await api("/session", { method: "DELETE" }); }
+    catch (error) { report(error); return; }
+  }
   call.leave();
-  if (sending) return notify("Wait for your message to finish sending.");
   saveDraft();
   socket?.disconnect();
   token = null;
+  currentUser = null;
+  for (const id of ["profile-dialog", "members-dialog", "public-profile-dialog"]) $(id).close();
+  $("password-form").reset();
   subscription = null;
   generation++;
   channelId = null;
@@ -665,6 +696,7 @@ $("leave").onclick = () => {
   $("workspace").hidden = true;
   $("join").hidden = false;
   notify("");
-};
+}
+$("leave").onclick = () => signOut();
 window.addEventListener("beforeunload", saveDraft);
 window.addEventListener("beforeunload", () => call.leave());

@@ -86,7 +86,8 @@ app.whenReady().then(() => {
       });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || `Request failed (${response.status})`);
+        const details = Object.entries(error.fields || {}).map(([field, messages]) => `${field.replaceAll("_", " ")}: ${messages.join(", ")}`).join("; ");
+        throw new Error(details || error.error || `Request failed (${response.status})`);
       }
       return binary
         ? new Uint8Array(await response.arrayBuffer())

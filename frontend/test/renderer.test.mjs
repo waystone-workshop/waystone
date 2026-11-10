@@ -122,6 +122,7 @@ test("renderer sends text, pictures and drawings, exports a range, and restores 
     w.eval(await readFile(new URL("../dist/app.js", import.meta.url), "utf8"));
     $("server").value = backend.origin;
     $("name").value = "Ada";
+    $("password").value = "test-password-long";
     submit("join-form");
     await poll(
       () =>
@@ -264,10 +265,11 @@ test("renderer sends text, pictures and drawings, exports a range, and restores 
     assert.equal($("open-channel-board").disabled, true);
     assert.equal(
       JSON.parse(w.localStorage.getItem("waystone-preferences")).name,
-      "Ada",
+      "ada",
     );
   } finally {
     $("leave").click();
+    await poll(() => $("workspace").hidden);
     await Promise.all(
       sockets.map((socket) =>
         socket.readyState === WebSocket.CLOSED

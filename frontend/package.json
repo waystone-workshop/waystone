@@ -18,6 +18,7 @@
     "package:mac": "npm run build && electron-builder --mac dmg",
     "test:e2e": "npm run build && node e2e/smoke.mjs",
     "test:audio": "npm run build && node e2e/audio.mjs",
+    "test:accounts": "npm run build && node e2e/accounts.mjs",
     "package:mac:zip": "npm run build && electron-builder --mac zip"
   },
   "dependencies": {

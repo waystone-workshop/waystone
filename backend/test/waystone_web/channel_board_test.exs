@@ -5,7 +5,7 @@ defmodule WaystoneWeb.ChannelBoardTest do
   import Ecto.Query
 
   defp authenticated(conn) do
-    token = Phoenix.Token.sign(WaystoneWeb.Endpoint, "desktop", "Ada")
+    token = Waystone.AccountsFixtures.token()
     put_req_header(conn, "authorization", "Bearer " <> token)
   end
 

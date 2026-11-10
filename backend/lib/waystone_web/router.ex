@@ -21,7 +21,15 @@ defmodule WaystoneWeb.Router do
 
   scope "/api", WaystoneWeb do
     pipe_through :api
-    post "/session", ApiController, :session
+    post "/session", AccountController, :login
+    delete "/session", AccountController, :logout
+    post "/register", AccountController, :register
+    get "/me", AccountController, :me
+    put "/me", AccountController, :update
+    put "/me/password", AccountController, :password
+    get "/users", AccountController, :users
+    get "/users/:id", AccountController, :show
+    put "/users/:id/role", AccountController, :role
     get "/channels", ApiController, :channels
     post "/channels/:id/call", ApiController, :join_call
     post "/channels", ApiController, :create_channel

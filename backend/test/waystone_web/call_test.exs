@@ -28,7 +28,7 @@ defmodule WaystoneWeb.CallTest do
     conn: conn,
     channel: channel
   } do
-    session = Phoenix.Token.sign(WaystoneWeb.Endpoint, "desktop", "Ada")
+    session = Waystone.AccountsFixtures.token()
     conn = put_req_header(conn, "authorization", "Bearer " <> session)
     response = conn |> post("/api/channels/#{channel.id}/call") |> json_response(200)
     [header, payload, signature] = String.split(response["token"], ".")
@@ -54,7 +54,7 @@ defmodule WaystoneWeb.CallTest do
 
   test "unconfigured voice returns an actionable error", %{conn: conn, channel: channel} do
     Application.delete_env(:waystone, :voice)
-    session = Phoenix.Token.sign(WaystoneWeb.Endpoint, "desktop", "Ada")
+    session = Waystone.AccountsFixtures.token()
 
     assert conn
            |> put_req_header("authorization", "Bearer " <> session)

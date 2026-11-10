@@ -854,3 +854,15 @@ canvas {
 .update-panel strong { color: var(--accent); }
 .update-panel p { margin: 10px 0 16px; }
 .update-panel progress { width: 100%; accent-color: var(--accent); margin-bottom: 12px; }
+/* Accounts share the warm, quiet workspace palette. */
+.account-dialog { width: min(620px, calc(100vw - 40px)); max-height: 85vh; overflow: auto; }
+.account-dialog form { display: grid; gap: 16px; margin: 20px 0; }
+.account-dialog label, #join-form label { display: grid; gap: 8px; }
+.account-dialog textarea, .account-dialog select, #auth-mode { width: 100%; padding: 12px; border: 1px solid var(--border, #435047); border-radius: 8px; background: var(--surface, #202923); color: inherit; font: inherit; }
+.member-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 0; border-bottom: 1px solid #ffffff14; }
+.member-profile { display: flex; align-items: center; gap: 12px; flex: 1; text-align: left; }
+.avatar { display: inline-grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 14px; color: white; font-weight: 700; letter-spacing: .04em; }
+.avatar-pine { background: #426c56; }.avatar-amber { background: #916c32; }.avatar-slate { background: #55677e; }.avatar-berry { background: #81536d; }
+.role-label { font-size: 12px; opacity: .75; text-transform: capitalize; }
+.author-profile { padding: 0; border: 0; background: transparent; color: inherit; font-weight: 700; }
+.author-profile:hover { text-decoration: underline; }

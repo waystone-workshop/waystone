@@ -57,6 +57,12 @@ is stable. Installed Windows clients download stable updates in the background
 and install on normal exit. An unsigned macOS build still requires a manual
 release download; native automatic updates need Apple signing/notarization.
 
+When rolling out the accounts version, friends must register with a username,
+password and invitation code in the updated desktop. Old nickname tokens are
+rejected; historical messages are preserved. Assign the first admin through the
+trusted console as documented in [accounts and roles](../../docs/accounts.md).
+The invite code alone can never grant admin privileges.
+
 ## Operations and recovery
 
 - `sudo docker compose ps` / `sudo docker compose logs --tail=100 backend`.

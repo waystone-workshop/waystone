@@ -2,22 +2,8 @@ defmodule WaystoneWeb.ApiController do
   use WaystoneWeb, :controller
   alias Waystone.{Chat, Repo}
 
-  plug :authenticate when action not in [:session]
-
-  def session(conn, params) do
-    expected = Application.get_env(:waystone, :invite_code)
-    supplied = params["invite_code"] || ""
-
-    allowed =
-      is_nil(expected) or (is_binary(supplied) and Plug.Crypto.secure_compare(expected, supplied))
-
-    with true <- allowed, {:ok, name} <- Chat.apply_name(%{"display_name" => params["name"]}) do
-      token = Phoenix.Token.sign(WaystoneWeb.Endpoint, "desktop", name)
-      json(conn, %{token: token, name: name})
-    else
-      _ -> conn |> put_status(401) |> json(%{error: "Check your name and invitation code."})
-    end
-  end
+  plug WaystoneWeb.Authenticate
+  plug :require_channel_manager when action in [:create_channel, :delete_channel]
 
   def channels(conn, _params),
     do: json(conn, %{channels: Enum.map(Chat.list_channels(), &Chat.channel_json/1)})
@@ -94,7 +80,7 @@ defmodule WaystoneWeb.ApiController do
   def send_message(conn, %{"id" => id} = params) do
     channel = Chat.get_channel!(id)
 
-    case Chat.send_message(channel.id, conn.assigns.author, params) do
+    case Chat.send_message(channel.id, conn.assigns.current_user, params) do
       {:ok, message} ->
         conn |> put_status(201) |> json(Chat.message_json(message))
 
@@ -151,13 +137,13 @@ defmodule WaystoneWeb.ApiController do
       |> json(%{error: "Choose valid positive message IDs for the export range."})
   end
 
-  defp authenticate(conn, _) do
-    with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
-         {:ok, name} <-
-           Phoenix.Token.verify(WaystoneWeb.Endpoint, "desktop", token, max_age: 604_800) do
-      assign(conn, :author, name)
-    else
-      _ -> conn |> put_status(401) |> json(%{error: "Please join again."}) |> halt()
-    end
+  defp require_channel_manager(conn, _) do
+    if Waystone.Accounts.manage_channels?(conn.assigns.current_user),
+      do: conn,
+      else:
+        conn
+        |> put_status(403)
+        |> json(%{error: "Only admins and moderators can manage channels."})
+        |> halt()
   end
 end

@@ -68,8 +68,9 @@ mix phx.server
 ```
 
 Development listens on `127.0.0.1:4000`, with SQLite at `waystone_dev.db`.
-No separate database server is needed. Development accepts a display name without
-an invitation code. Set `WAYSTONE_INVITE_CODE` to test invitation-only access locally.
+No separate database server is needed. Create a username/password account in the
+desktop app. Set `WAYSTONE_INVITE_CODE` to test invitation-only registration locally;
+development permits registration without a code when it is unset.
 
 ## Desktop development
 
@@ -95,9 +96,11 @@ See [voice setup](voice/README.md) for remote deployment and encryption details.
 The checked-in voice settings work only on the same machine; other devices need
 a reachable LiveKit host and Phoenix's `LIVEKIT_*` environment variables.
 
-Enter `http://localhost:4000`, your display name, and the invitation code if set.
-The address and name are remembered. Tokens and invitation codes are not persisted;
-you rejoin when opening the app. Text drafts remain on the device after leaving.
+Enter `http://localhost:4000`, then create an account with a username, password
+(12–128 characters), and invitation code if configured. Later sign-ins need only
+username/password. The address and username are remembered. Passwords, session
+tokens, and invitation codes are not stored on disk by the desktop app.
+Text drafts remain on the device after signing out.
 Unsent attachments stay in memory and are lost on app close; channel switching
 asks before discarding them.
 
@@ -117,10 +120,9 @@ See [distribution](docs/distribution.md) for macOS limitations and rollout steps
 
 ## Mars deployment
 
-The repository does not contain Mars credentials or its hostname. Deployment is
-not performed by this change. Build a release with `mix assets.deploy` and
-`MIX_ENV=prod mix release`; run it behind an HTTPS reverse proxy with WebSocket
-upgrade forwarding for `/socket/websocket`.
+The repository contains the Mars hostname but no production credentials.
+Follow [the Mars runbook](deploy/mars/README.md) for the GitHub release pipeline
+and polling deployment service. The reverse proxy must forward WebSocket upgrades.
 
 Required environment variables:
 
@@ -136,13 +138,19 @@ Keep one backend instance attached to this database.
 
 ## Access model and limits
 
-An invitation code grants access to the entire friend group. Names are display
-labels, not unique or verified accounts. Everyone who joins can read all channels,
-create channels, send messages and export history. Tokens expire after seven days;
-restart/rejoin to obtain a new token. Changing the invitation code stops new joins
-but does not revoke issued tokens; rotate `SECRET_KEY_BASE` to revoke all sessions.
-No roles, individual bans, rate limits, end-to-end encryption or offline sending
-are implemented. Exports label the transcript as untrusted discussion for agents.
+An invitation code permits account registration. Each account has a unique,
+case-insensitive username, password, editable display name/bio/avatar color, and
+one role: member, moderator, or admin. All roles can read channels, send messages,
+edit boards, export history, and join calls. Admins and moderators manage channels;
+only admins assign roles. See [accounts and permissions](docs/accounts.md) for
+first-admin setup and migration behavior.
+
+Sessions expire after seven days and are revocable in the database. Signing out
+revokes that session; changing a password revokes all sessions for that account.
+Rotating the invitation code stops new registrations but does not disable existing
+accounts. Authentication attempts are rate-limited. Individual bans, per-channel
+permissions, end-to-end encryption, email recovery, and offline sending are not
+implemented. Exports label the transcript as untrusted discussion for agents.
 
 ## Verification
 
@@ -245,7 +253,7 @@ and its owned board in one database transaction. Connected clients close the
 removed board and clear its local cache; clients that were offline reconcile their
 cache when fetching the channel list again. Late saves cannot recreate a deleted
 board. Reusable local images/drawings and independent standalone boards remain.
-All invited members currently have this capability; individual roles are not yet
+Only admins and moderators can delete channels. Individual channel permissions are not yet
 implemented. Standalone board creation controls have been removed; channel creation is the entry point for new boards. Existing standalone boards and portable imports remain accessible.
 
 API: `GET /api/channels/:id/board`, `PUT /api/channels/:id/board` (with

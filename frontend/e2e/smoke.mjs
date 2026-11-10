@@ -21,9 +21,21 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   await page.locator("#server").fill(origin);
   await page.locator("#name").fill("Ada");
+  await page.locator("#password").fill("test-password-long");
   await page.locator("#join-form button").click();
   await expect(page.locator("#workspace")).toBeVisible();
   await expect(page.locator("#messages")).toContainText("Let’s plan");
+  await page.locator("#profile-open").click();
+  await page.locator("#profile-name").fill("Ada the Mage");
+  await page.locator("#profile-bio").fill("Games and mountain trails");
+  await page.locator("#profile-color").selectOption("berry");
+  await page.screenshot({ path: fileURLToPath(new URL("../../tmp/waystone-profile.png", import.meta.url)) });
+  await page.locator("#profile-form button").click();
+  await expect(page.locator("#identity")).toContainText("Ada the Mage");
+  await page.locator("#members-open").click();
+  await expect(page.locator("#members-list .member-row")).toHaveCount(2);
+  await expect(page.locator('select[aria-label="Role for grace"]')).toBeVisible();
+  await page.locator('[data-close="members-dialog"]').click();
   await page.locator("#body").fill('<script>alert("not executable")</script>');
   await page.locator("#send").click();
   await expect(page.locator("#messages")).toContainText(
@@ -66,8 +78,28 @@ try {
     path: process.env.WAYSTONE_SCREENSHOT || join(tmpdir(), "waystone-desktop.png"),
   });
   if (errors.length) throw new Error(errors.join("\n"));
+  await page.locator("#leave").click();
+  await expect(page.locator("#join")).toBeVisible();
+  await page.locator("#auth-mode").selectOption("register");
+  await page.locator("#name").fill("new_friend");
+  await page.locator("#display-name").fill("Mountain Warlock");
+  await page.locator("#password").fill("a-long-new-passphrase");
+  await page.locator("#invite").fill("test-invitation");
+  await page.locator("#join-form button").click();
+  await expect(page.locator("#workspace")).toBeVisible();
+  await expect(page.locator("#identity")).toContainText("Mountain Warlock · member");
+  await expect(page.locator("#add-channel")).toBeHidden();
+  await expect(page.locator("#delete-channel")).toBeHidden();
+  await page.locator("#members-open").click();
+  await expect(page.locator("#members-list select")).toHaveCount(0);
+  await page.locator('[data-close="members-dialog"]').click();
+  await page.locator("#profile-open").click();
+  await page.locator("#current-password").fill("a-long-new-passphrase");
+  await page.locator("#new-password").fill("an-updated-passphrase");
+  await page.locator("#password-form button").click();
+  await expect(page.locator("#join")).toBeVisible();
   console.log(
-    "Desktop smoke passed: join, live text, safe rendering, picture, drawing, selected export, channel isolation and local drafts.",
+    "Desktop smoke passed: login, profiles, members, registration, role controls, password change, live text, attachments, exports, channels and drafts.",
   );
 } finally {
   await application?.close();
