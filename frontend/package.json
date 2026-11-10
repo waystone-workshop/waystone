@@ -45,6 +45,7 @@
       "preload.cjs",
       "index.html",
       "src/style.css",
+      "src/hangout.css",
       "dist/**",
       "policy.cjs",
       "media-policy.cjs",

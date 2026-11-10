@@ -27,6 +27,13 @@ defmodule WaystoneWeb.Router do
     get "/me", AccountController, :me
     put "/me", AccountController, :update
     put "/me/password", AccountController, :password
+    put "/me/media/:kind", AccountController, :upload_media
+    delete "/me/media/:kind", AccountController, :delete_media
+    get "/users/:id/media/:kind", AccountController, :media
+    get "/voice-rooms", VoiceRoomController, :index
+    post "/voice-rooms", VoiceRoomController, :create
+    delete "/voice-rooms/:id", VoiceRoomController, :delete
+    post "/voice-rooms/:id/call", VoiceRoomController, :join
     get "/users", AccountController, :users
     get "/users/:id", AccountController, :show
     put "/users/:id/role", AccountController, :role

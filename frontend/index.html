@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="dist/design-system/styles/tokens.css" />
     <link rel="stylesheet" href="dist/design-system/styles/components.css" />
     <link rel="stylesheet" href="src/style.css" />
+    <link rel="stylesheet" href="src/hangout.css" />
   </head>
   <body>
     <div id="notice" role="status" aria-live="polite"></div>
@@ -26,21 +27,21 @@
     </section>
     <section id="join" class="join">
       <div class="wordmark"><img src="dist/design-system/assets/mark.svg" alt="" width="22" height="22" /> WAYSTONE</div>
-      <h1>A place to make<br />things together.</h1>
-      <p>Your friends. Your conversations. Your next idea.</p>
+      <h1>Your people.<br />Your place.</h1>
+      <p>Pick up where you left off.</p>
 
       <button id="local-canvases" class="offline-entry">
         Open local Canvases →
       </button>
       <form id="join-form">
         <label>Welcome back<select id="auth-mode"><option value="login">Sign in</option><option value="register">Create an account</option></select></label>
-        <label
-          >Mars backend address<input
+        <details id="connection-settings"><summary>Connection settings</summary><label
+          >Server<input
             id="server"
             type="url"
             placeholder="https://mars.example.com"
             required
-        /></label>
+        /></label></details>
         <label
           >Username<input
             id="name"
@@ -59,80 +60,37 @@
         <button class="primary" id="auth-submit">Sign in →</button>
       </form>
       <p id="auth-hint">Your account stays with you. Sign in with your username and password.</p>
-      <small>Use http://localhost:4000 for local development.</small>
       <p><button id="check-updates" type="button">Check for updates</button></p>
     </section>
     <main id="workspace" hidden>
-      <aside>
-        <div class="wordmark"><img src="dist/design-system/assets/mark.svg" alt="" width="22" height="22" /> WAYSTONE</div>
-        <p class="eyebrow">OUR LITTLE CORNER</p>
-        <div class="section-title">
-          <span>TEXT CHANNELS</span
-          ><button id="add-channel" title="Create channel">+</button>
-        </div>
-
-        <button id="workspace-canvases">▧ Canvases</button>
-        <button id="members-open">Members</button>
-        <nav id="channels" aria-label="Text channels"></nav>
-        <div class="profile">
-          <strong id="identity"></strong><span id="connection">Connecting…</span
-          ><button id="profile-open">My profile</button><button id="leave">Sign out</button><button id="workspace-updates">Check for updates</button>
-        </div>
-      </aside>
-      <section class="conversation">
-        <header>
-          <div>
-            <h1 id="channel-title">Choose a channel</h1>
-            <p>Talk it through. Sketch it out. Build something.</p>
-          </div>
-          <div class="channel-actions">
-            <button id="join-audio" disabled>Join audio</button>
-            <button id="open-channel-board" disabled>Open channel board</button
-            ><button id="export-open">Export context ↗</button
-            ><button id="delete-channel" disabled>Delete channel</button>
-          </div>
-        </header>
-        <section id="call-panel" class="call-panel" aria-label="Audio call" hidden>
-          <div class="call-heading"><strong id="call-state" role="status">Connecting audio…</strong><span id="call-channel"></span></div>
-          <ul id="call-participants" aria-label="Call participants"></ul>
-          <div class="call-controls">
-            <button id="call-mute" aria-pressed="false">Mute mic</button>
-            <button id="call-deafen" aria-pressed="false">Deafen</button>
-            <button id="call-resume" hidden>Enable audio playback</button>
-            <button id="call-leave" class="call-end">Leave call</button>
-          </div>
-          <small>Microphone only · Deafen silences incoming audio; mute controls your microphone.</small>
-          <div id="call-audio"></div>
-        </section>
+      <header class="app-masthead">
+        <div class="brand-lockup"><img src="dist/design-system/assets/mark.svg" alt="" width="26" height="26" /><strong>waystone</strong><span>A place for your people</span></div>
+        <div class="masthead-actions"><span id="connection" role="status">Connecting…</span><button id="profile-open" class="self-profile" aria-label="My profile"><span id="self-avatar"></span><span id="identity"></span></button><button id="settings-open" class="icon-button" aria-label="Settings" title="Settings" data-icon="settings"></button></div>
+      </header>
+      <header class="room-toolbar">
+        <button id="space-open" class="space-trigger" aria-haspopup="dialog"><h1 id="channel-title">Choose a space</h1><span data-icon="chevron"></span></button>
+        <div class="room-actions"><div class="view-switch" aria-label="Space view"><button id="conversation-view" class="active" aria-pressed="true">Conversation</button><button id="open-channel-board" disabled aria-pressed="false">Board</button></div><button id="members-toggle" class="icon-button" aria-label="Toggle people panel" aria-expanded="true" aria-controls="people-panel" title="Who’s around" data-icon="people"></button><details class="room-menu"><summary aria-label="Space actions" title="Space actions" data-icon="more"></summary><div class="menu-items"><button id="export-open">Export conversation</button><button id="workspace-canvases">Local Canvases</button><button id="delete-channel" class="danger-text" disabled>Delete space</button></div></details></div>
+      </header>
+      <section class="conversation" aria-label="Conversation">
+        <div class="conversation-date">Your shared space</div>
         <button id="older" hidden>Load earlier messages</button>
         <div id="messages" role="log" aria-label="Messages"></div>
-        <form id="composer">
-          <div id="pending"></div>
-          <label class="sr-only" for="body">Message</label
-          ><textarea
-            id="body"
-            maxlength="2000"
-            rows="2"
-            placeholder="A thought, a question, the start of something…"
-          ></textarea>
-          <footer>
-            <div>
-              <button id="picture" type="button">＋ Picture</button
-              ><button id="draw" type="button">✎ Draw</button
-              ><span id="draft-status"></span>
-            </div>
-            <button id="send" class="primary">Send ↑</button>
-          </footer>
-        </form>
-        <input
-          id="files"
-          type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp"
-          multiple
-          hidden
-        />
+        <section id="call-panel" class="voice-capsule" aria-label="Active voice party" hidden>
+          <details id="call-details"><summary><span class="voice-signal" data-icon="signal"></span><span id="call-channel"></span><span id="call-count"></span><span data-icon="chevron"></span></summary><div class="voice-details"><strong id="call-state" role="status">Connecting audio…</strong><ul id="call-participants" aria-label="Call participants"></ul><button id="call-deafen" aria-pressed="false">Deafen</button><button id="call-resume" hidden>Enable audio playback</button><button id="voice-switch">Switch voice room</button></div></details>
+          <button id="call-mute" class="icon-button" aria-label="Mute microphone" title="Mute microphone" aria-pressed="false" data-icon="mic"></button><button id="call-leave" class="icon-button danger-text" aria-label="Leave voice" title="Leave voice" data-icon="hangup"></button><div id="call-audio"></div>
+        </section>
+        <button id="join-audio" class="voice-entry" aria-haspopup="dialog"><span data-icon="headphones"></span>Join voice</button>
+        <form id="composer"><div id="pending"></div><div class="composer-row"><button id="picture" class="icon-button" type="button" aria-label="Attach an image" title="Attach an image" data-icon="attach"></button><button id="draw" class="icon-button" type="button" aria-label="Draw" title="Draw" data-icon="pen"></button><label class="sr-only" for="body">Message</label><textarea id="body" maxlength="2000" rows="1" placeholder="Say something to the room…"></textarea><button id="send" class="icon-button send-button" aria-label="Send message" title="Send message" data-icon="send"></button></div><footer><span id="draft-status"></span><span>Enter to send · Shift + Enter for a new line</span></footer></form>
+        <input id="files" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
       </section>
+      <aside id="people-panel" aria-label="Who’s around"><div class="people-heading"><h2>Who’s around</h2><button id="members-collapse" class="icon-button" aria-label="Collapse people panel" data-icon="collapse"></button></div><div id="presence-status" role="status">Connecting to your people…</div><div id="people-online"></div><details class="offline-group"><summary id="offline-title">Offline</summary><div id="people-offline"></div></details><button id="members-open" class="manage-members">Member directory</button></aside>
     </main>
+    <dialog id="space-dialog" class="picker-dialog"><div class="picker-heading"><h2>Find your space</h2><button data-close="space-dialog" class="icon-button" aria-label="Close space picker" data-icon="close"></button></div><label class="sr-only" for="space-search">Search spaces</label><input id="space-search" type="search" placeholder="Search spaces…" autocomplete="off" /><nav id="channels" aria-label="Text spaces"></nav><p id="space-no-results" hidden>No spaces match your search.</p><button id="add-channel">Create a space</button></dialog>
+    <dialog id="voice-dialog" class="picker-dialog"><div class="picker-heading"><h2>A place to hang out</h2><button data-close="voice-dialog" class="icon-button" aria-label="Close voice rooms" data-icon="close"></button></div><p class="subtle">Voice stays with you while you move between spaces.</p><div id="voice-rooms"></div><button id="add-voice-room">Create a voice room</button></dialog>
+    <dialog id="voice-create-dialog"><form id="voice-create-form"><h2>A new gathering spot</h2><label>Room name<input id="voice-room-name" required maxlength="40" pattern="[a-z0-9][a-z0-9-]{0,39}" placeholder="late-night-party" /></label><div class="actions"><button type="button" data-close="voice-create-dialog">Cancel</button><button class="primary">Create room</button></div></form></dialog>
+    <dialog id="settings-dialog" class="account-dialog"><div class="picker-heading"><h2>Your corner</h2><button data-close="settings-dialog" class="icon-button" aria-label="Close settings" data-icon="close"></button></div><button id="settings-profile">Edit profile</button><button id="workspace-updates">Check for updates</button><button id="leave" class="danger-text">Sign out</button></dialog>
+    <section id="profile-popover" class="profile-popover" popover="auto" aria-label="User profile"><button id="profile-popover-close" class="profile-close icon-button" aria-label="Close profile" data-icon="close"></button><div id="profile-card"></div><button id="view-full-profile">View profile <span data-icon="arrow"></span></button></section>
+
     <dialog id="members-dialog" class="account-dialog">
       <div class="section-title"><h2>Your party</h2><button data-close="members-dialog" aria-label="Close members">Close</button></div>
       <p>Familiar faces, one shared space.</p><div id="members-list"></div>
@@ -142,7 +100,7 @@
     </dialog>
     <dialog id="profile-dialog" class="account-dialog">
       <div class="section-title"><h2>Make yourself at home</h2><button data-close="profile-dialog">Close</button></div>
-      <p id="profile-account"></p>
+      <p id="profile-account"></p><div id="profile-edit-banner" class="profile-banner"></div><div id="profile-edit-avatar"></div><div class="media-controls"><label class="upload-control">Change avatar<input id="avatar-upload" type="file" accept="image/png,image/jpeg,image/gif,image/webp" /><small>Up to 1 MB</small></label><button id="avatar-remove" type="button">Remove avatar</button><label class="upload-control">Change banner<input id="banner-upload" type="file" accept="image/png,image/jpeg,image/gif,image/webp" /><small>Up to 2 MB</small></label><button id="banner-remove" type="button">Remove banner</button></div><p id="profile-upload-status" role="status"></p>
       <form id="profile-form">
         <label>Display name<input id="profile-name" required maxlength="24" /></label>
         <label>A little about you<textarea id="profile-bio" maxlength="280" rows="3" placeholder="Your next adventure, favorite game, or current obsession…"></textarea></label>

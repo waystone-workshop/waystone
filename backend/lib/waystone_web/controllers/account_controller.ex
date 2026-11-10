@@ -51,9 +51,48 @@ defmodule WaystoneWeb.AccountController do
 
   def update(conn, params) do
     case Accounts.update_profile(conn.assigns.current_user, params) do
-      {:ok, user} -> json(conn, Accounts.profile(user))
+      {:ok, user} -> profile_response(conn, user)
       {:error, changeset} -> invalid(conn, changeset)
     end
+  end
+
+  def upload_media(conn, %{"kind" => kind} = params) do
+    case Accounts.set_media(conn.assigns.current_user, kind, params["data"]) do
+      {:ok, user} ->
+        profile_response(conn, user)
+
+      _ ->
+        conn
+        |> put_status(422)
+        |> json(%{
+          error: "Choose a PNG, JPEG, GIF or WebP. Avatars: 1 MB maximum. Banners: 2 MB maximum."
+        })
+    end
+  end
+
+  def delete_media(conn, %{"kind" => kind}) do
+    case Accounts.remove_media(conn.assigns.current_user, kind) do
+      {:ok, user} -> profile_response(conn, user)
+      _ -> conn |> put_status(422) |> json(%{error: "Choose avatar or banner."})
+    end
+  end
+
+  def media(conn, %{"id" => id, "kind" => kind}) do
+    with %{} = user <- Accounts.get_user(id),
+         %{} = media <- Accounts.media(user.id, kind) do
+      conn
+      |> put_resp_header("content-type", media.content_type)
+      |> put_resp_header("cache-control", "private, no-cache")
+      |> put_resp_header("x-content-type-options", "nosniff")
+      |> send_resp(200, media.data)
+    else
+      _ -> send_resp(conn, 404, "Not found")
+    end
+  end
+
+  defp profile_response(conn, user) do
+    WaystoneWeb.Endpoint.broadcast("directory", "profile_updated", %{id: user.id})
+    json(conn, Accounts.profile(user))
   end
 
   def password(conn, params) do

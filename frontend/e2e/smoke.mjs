@@ -19,12 +19,25 @@ try {
   await page.waitForLoadState("load");
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.locator("#connection-settings summary").click();
   await page.locator("#server").fill(origin);
   await page.locator("#name").fill("Ada");
   await page.locator("#password").fill("test-password-long");
   await page.locator("#join-form button").click();
   await expect(page.locator("#workspace")).toBeVisible();
   await expect(page.locator("#messages")).toContainText("Let’s plan");
+  await expect(page.locator("#people-online .person-row")).toHaveCount(2);
+  await page.locator("#members-collapse").click();
+  await expect(page.locator("#people-panel")).toBeHidden();
+  await page.locator("#members-toggle").click();
+  await expect(page.locator("#people-panel")).toBeVisible();
+  await page.setViewportSize({ width: 700, height: 760 });
+  await expect(page.locator("#people-panel")).toBeVisible();
+  if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw Error("Narrow layout overflows horizontally");
+  await page.locator("#members-collapse").click();
+  await expect(page.locator("#people-panel")).toBeHidden();
+  await page.setViewportSize({ width: 1234, height: 785 });
+  await page.locator("#members-toggle").click();
   await page.locator("#profile-open").click();
   await page.locator("#profile-name").fill("Ada the Mage");
   await page.locator("#profile-bio").fill("Games and mountain trails");
@@ -61,23 +74,29 @@ try {
   await expect(page.locator("#messages img")).toHaveCount(2);
   await page.locator("article input[type=checkbox]").first().check();
   await page.locator("article input[type=checkbox]").last().check();
+  await page.locator(".room-menu summary").click();
   await page.locator("#export-open").click();
   await expect(page.locator("#export-preview")).toContainText("Waystone");
   if (!requests.some((path) => path.includes("from=1&to=4")))
     throw new Error("Export did not request selected range");
   await page.locator('[data-close="export-dialog"]').click();
   await page.locator("#body").fill("Keep this local draft");
+  await page.locator("#space-open").click();
   await page.locator("#add-channel").click();
   await page.locator("#channel-name").fill("planning");
   await page.locator("#channel-form .primary").click();
-  await expect(page.locator("#channel-title")).toHaveText("# planning");
+  await expect(page.locator("#channel-title")).toHaveText("Planning");
   await expect(page.locator("article")).toHaveCount(0);
+  await page.locator("#space-open").click();
+  await page.locator("#space-search").fill("common");
+  await expect(page.locator("#channels button")).toHaveCount(1);
   await page.locator("#channels button").first().click();
   await expect(page.locator("#body")).toHaveValue("Keep this local draft");
   await page.screenshot({
     path: process.env.WAYSTONE_SCREENSHOT || join(tmpdir(), "waystone-desktop.png"),
   });
   if (errors.length) throw new Error(errors.join("\n"));
+  await page.locator("#settings-open").click();
   await page.locator("#leave").click();
   await expect(page.locator("#join")).toBeVisible();
   await page.locator("#auth-mode").selectOption("register");

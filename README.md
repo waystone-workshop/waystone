@@ -12,6 +12,9 @@ automatic desktop updates.
 
 ## First phase
 
+The new hangout layout and its supported features are described in
+[the desktop redesign notes](docs/hangout-ui.md).
+
 - Multiple text channels, live messages, and paginated history.
 - Pictures (PNG, JPEG, GIF, WebP): up to four per message, 5 MB each.
 - A local drawing pad with pen color, brush size, clear, and PNG attachment.

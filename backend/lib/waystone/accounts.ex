@@ -124,6 +124,59 @@ defmodule Waystone.Accounts do
   def get_user(_), do: nil
   def list_users, do: Repo.all(from u in User, order_by: u.username)
   def update_profile(user, attrs), do: user |> User.profile_changeset(attrs) |> Repo.update()
+
+  def media(user_id, kind) when kind in ["avatar", "banner"],
+    do: Repo.get_by(Waystone.Accounts.ProfileMedia, user_id: user_id, kind: kind)
+
+  def media(_, _), do: nil
+
+  def set_media(user, kind, data) when kind in ["avatar", "banner"] do
+    max_bytes = if kind == "avatar", do: 1_048_576, else: 2_097_152
+
+    with true <- is_binary(data) and byte_size(data) <= div(max_bytes * 4, 3) + 4,
+         {:ok, [image]} <- Waystone.Chat.Attachments.validate([%{"data" => data}]),
+         {:ok, bytes} <- Base.decode64(image["data"]),
+         true <- byte_size(bytes) <= max_bytes do
+      Repo.transaction(fn ->
+        Repo.insert!(
+          %Waystone.Accounts.ProfileMedia{
+            user_id: user.id,
+            kind: kind,
+            data: bytes,
+            content_type: image["content_type"]
+          },
+          on_conflict: {:replace, [:data, :content_type]},
+          conflict_target: [:user_id, :kind]
+        )
+
+        fields = media_fields(kind, Ecto.UUID.generate(), image["content_type"])
+        user |> Ecto.Changeset.change(fields) |> Repo.update!()
+      end)
+    else
+      _ -> {:error, :invalid_media}
+    end
+  end
+
+  def set_media(_, _, _), do: {:error, :invalid_media}
+
+  def remove_media(user, kind) when kind in ["avatar", "banner"] do
+    Repo.transaction(fn ->
+      Repo.delete_all(
+        from m in Waystone.Accounts.ProfileMedia, where: m.user_id == ^user.id and m.kind == ^kind
+      )
+
+      user |> Ecto.Changeset.change(media_fields(kind, nil, nil)) |> Repo.update!()
+    end)
+  end
+
+  def remove_media(_, _), do: {:error, :invalid_media}
+
+  defp media_fields("avatar", version, type),
+    do: [avatar_version: version, avatar_content_type: type]
+
+  defp media_fields("banner", version, type),
+    do: [banner_version: version, banner_content_type: type]
+
   def manage_channels?(user), do: user.role in ["admin", "moderator"]
 
   def change_role(actor, id, role) when role in ["admin", "moderator", "member"] do
@@ -154,5 +207,18 @@ defmodule Waystone.Accounts do
   end
 
   def profile(user),
-    do: Map.take(user, [:id, :username, :display_name, :bio, :avatar_color, :role, :inserted_at])
+    do:
+      Map.take(user, [
+        :id,
+        :username,
+        :display_name,
+        :bio,
+        :avatar_color,
+        :role,
+        :inserted_at,
+        :avatar_version,
+        :avatar_content_type,
+        :banner_version,
+        :banner_content_type
+      ])
 end

@@ -18,10 +18,16 @@ export class AudioCall {
       state: this.state, muted: this.muted, deafened: this.deafened,
       playbackBlocked: this.playbackBlocked,
       participants: participants.map((p) => ({
+        user_id: this.participantUserId(p),
         id: p.identity, name: p.name || "Friend", muted: !p.isMicrophoneEnabled,
         speaking: p.isSpeaking, self: p === this.room.localParticipant,
       })),
     });
+  }
+
+  participantUserId(participant) {
+    try { const id = JSON.parse(participant.metadata || "{}").user_id; return Number.isInteger(id) ? id : null; }
+    catch { return null; }
   }
 
   async join(channelId) {
