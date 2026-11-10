@@ -23,12 +23,16 @@ done
 gzip -dc "$release/waystone-backend-linux-amd64.tar.gz" | docker load
 mkdir -p "$release/website" "$release/config"
 tar -xzf "$release/waystone-website.tar.gz" -C "$release/website"
+# The deployment umask protects secrets. Public static assets must also be
+# readable by nginx's unprivileged worker inside its read-only bind mount.
+find "$release/website" -type d -exec chmod 755 {} +
+find "$release/website" -type f -exec chmod 644 {} +
 tar -xzf "$release/waystone-mars-deploy.tar.gz" -C "$release/config"
 if [[ -e website && ! -L website ]]; then
   echo 'website must be a deployment-managed symlink; preserve/move the existing directory first' >&2
   exit 1
 fi
-if docker compose ps -q backend | grep -q .; then
+if docker compose ps --all -q backend | grep -q .; then
   docker compose stop backend
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   docker compose run --rm --no-deps --entrypoint sh backend -c \
