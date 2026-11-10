@@ -1,5 +1,17 @@
 This is a web application written using the Phoenix web framework.
 
+## Shared agent context and deployment
+
+Cross-editor context lives in the private `waystone-workshop/agent-context` repo,
+cloned locally at `repositories/agent-context` (ignored by this repo). For release
+or Mars deployment work, read its `skills/waystone-deploy/SKILL.md`, `context.md`,
+and latest `handoff.md`. If missing, clone
+`https://github.com/waystone-workshop/agent-context.git` there. Fast-forward a clean
+context checkout before using it; preserve local edits. Cursor's project skill
+and Codex's `.agents/skills/waystone-deploy` entry point route to the same runbook.
+Source scripts and live checks take precedence over dated handoffs. Never put
+production secrets or invitation codes in shared context.
+
 ## Project guidelines
 
 - Use `mix precommit` alias when you are done with all changes and fix any pending issues
