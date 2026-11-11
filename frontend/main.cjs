@@ -20,6 +20,7 @@ function trusted(event) {
     throw new Error("Untrusted caller");
 }
 app.whenReady().then(() => {
+  app.setAppUserModelId("dev.waystone.desktop");
   window = new BrowserWindow({
     width: 1250,
     height: 850,
@@ -27,6 +28,7 @@ app.whenReady().then(() => {
     minHeight: 650,
     backgroundColor: "#101114",
     title: "Waystone",
+    icon: join(__dirname, "build", "icon.png"),
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
       contextIsolation: true,
