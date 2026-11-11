@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, Tray, Menu, nativeImage } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { createUpdater } = require("./updater.cjs");
+const { normalizeDesktopSettings, mergeDesktopSettings, hideOnClose } = require("./desktop-settings.cjs");
 const { join } = require("node:path");
 const { writeFile, readFile, stat } = require("node:fs/promises");
 const { pathToFileURL } = require("node:url");
@@ -13,13 +14,19 @@ const { validateCanvas } = require("./src/canvas-model.cjs");
 // separate local instances must not inherit another instance's preferences.
 const profile = process.argv.find((argument) => argument.startsWith("--user-data-dir="));
 if (profile) app.setPath("userData", profile.slice("--user-data-dir=".length));
-let window;
+let window, tray = null, quitting = false;
+let desktop = normalizeDesktopSettings();
 const entry = pathToFileURL(join(__dirname, "index.html")).href;
 function trusted(event) {
   if (event.sender !== window?.webContents || event.senderFrame?.url !== entry)
     throw new Error("Untrusted caller");
 }
-app.whenReady().then(() => {
+const primary = !app.isPackaged || app.requestSingleInstanceLock();
+if (!primary) app.quit();
+app.whenReady().then(async () => {
+  if (!primary) return;
+  desktop = await loadDesktopSettings();
+  applyLoginItem();
   app.setAppUserModelId("dev.waystone.desktop");
   window = new BrowserWindow({
     width: 1250,
@@ -67,6 +74,25 @@ app.whenReady().then(() => {
   const updateTimer = setInterval(() => updates.check(), 6 * 60 * 60 * 1000);
   updateTimer.unref();
   window.once("closed", () => clearInterval(updateTimer));
+  window.on("close", (event) => {
+    if (!hideOnClose({ closeToTray: trayWanted(), quitting })) return;
+    event.preventDefault();
+    window.hide();
+  });
+  syncTray();
+  app.on("second-instance", () => showWindow());
+  app.on("before-quit", (event) => {
+    if (!event.defaultPrevented) quitting = true;
+  });
+  ipcMain.handle("desktop-settings", (event) => { trusted(event); return publicDesktop(); });
+  ipcMain.handle("desktop-settings-save", async (event, patch) => {
+    trusted(event);
+    desktop = mergeDesktopSettings(desktop, patch);
+    await writeFile(join(app.getPath("userData"), "desktop-settings.json"), JSON.stringify(desktop));
+    applyLoginItem();
+    syncTray();
+    return publicDesktop();
+  });
   ipcMain.handle(
     "request",
     async (event, { server, path, token, body, method, binary = false }) => {
@@ -187,4 +213,41 @@ app.whenReady().then(() => {
   );
   window.loadFile("index.html");
 });
-app.on("window-all-closed", () => app.quit());
+app.on("window-all-closed", () => { if (!trayWanted() || quitting) app.quit(); });
+app.on("activate", () => showWindow());
+
+function desktopPath() { return join(app.getPath("userData"), "desktop-settings.json"); }
+async function loadDesktopSettings() {
+  try { return normalizeDesktopSettings(JSON.parse(await readFile(desktopPath(), "utf8"))); }
+  catch { return normalizeDesktopSettings(); }
+}
+function trayWanted() { return desktop.closeToTray && process.env.WAYSTONE_E2E !== "1"; }
+function publicDesktop() { return { ...desktop, packaged: app.isPackaged }; }
+function applyLoginItem() {
+  if (!app.isPackaged) return;
+  app.setLoginItemSettings({ openAtLogin: desktop.openAtLogin });
+}
+function showWindow() {
+  if (!window || window.isDestroyed()) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+}
+function syncTray() {
+  if (!trayWanted()) {
+    tray?.destroy();
+    tray = null;
+    if (window && !window.isDestroyed() && !window.isVisible()) showWindow();
+    return;
+  }
+  if (tray) return;
+  const image = nativeImage.createFromPath(join(__dirname, "build", "icon.png")).resize({ width: 16, height: 16 });
+  tray = new Tray(image);
+  tray.setToolTip("Waystone");
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "Show Waystone", click: showWindow },
+    { label: "Quit Waystone", click: () => app.quit() },
+  ]));
+  tray.on("click", showWindow);
+  tray.on("double-click", showWindow);
+}

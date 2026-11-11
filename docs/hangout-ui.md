@@ -18,8 +18,9 @@ participants, deafen, playback recovery, and room switching.
 
 Changing text spaces, opening/closing a board, and deleting a text space do not
 leave voice. Joining a different voice room requires confirmation. Leaving voice,
-signing out, closing the app, or receiving deletion of the current voice room
-releases the microphone. Legacy `/channels/:id/call` remains available for older
+signing out, quitting the app, or receiving deletion of the current voice room
+releases the microphone. Hiding the window to the tray keeps the call connected.
+Legacy `/channels/:id/call` remains available for older
 clients; new clients use `/voice-rooms/:id/call`. Old channel calls and new voice
 rooms are separate LiveKit rooms, so friends should update together.
 

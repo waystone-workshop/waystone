@@ -4,10 +4,11 @@ import { Socket, Presence } from "phoenix";
 import { icon, mountIcons } from "./icons.mjs";
 import { Room, RoomEvent, Track } from "livekit-client";
 import { AudioCall } from "./audio.mjs";
-import { voiceCapture, voicePublish } from "./audio-quality.mjs";
+import { voiceCaptureFor, voicePublish, readAudioPreferences } from "./audio-quality.mjs";
 import { createNoiseProcessor } from "./noise-processor.mjs";
 import { setupUpdates } from "./updates.mjs";
 import { setupProfiles } from "./profiles.mjs";
+import { setupSettings } from "./settings.mjs";
 import { mergeMessages, rangeQuery } from "./context.mjs";
 const $ = (id) => document.getElementById(id);
 mountIcons(document);
@@ -70,8 +71,11 @@ function setPeopleOpen(open) {
 setPeopleOpen(peoplePreference);
 $("members-toggle").onclick = () => setPeopleOpen($("people-panel").hidden);
 $("members-collapse").onclick = () => setPeopleOpen(false);
-$("settings-open").onclick = () => $("settings-dialog").showModal();
-$("settings-profile").onclick = () => $("profile-open").click();
+const settings = setupSettings({
+  document, bridge: window.waystone, report, openProfile: () => $("profile-open").click(),
+  user: () => currentUser, avatar: (person) => profiles.avatar(person),
+});
+$("settings-open").onclick = () => { settings.open(); $("settings-dialog").showModal(); };
 $("space-open").onclick = () => { $("space-search").value = ""; renderSpaces(); $("space-dialog").showModal(); $("space-search").focus(); };
 $("space-search").oninput = renderSpaces;
 function spaceLabel(space) { return space.name === "general" ? "The Common Room" : space.name.replaceAll("-", " ").replace(/^./, (letter) => letter.toUpperCase()); }
@@ -97,7 +101,7 @@ $("auth-mode").onchange = () => {
 };
 const call = new AudioCall({
   createRoom: () => new Room({
-    audioCaptureDefaults: voiceCapture,
+    audioCaptureDefaults: voiceCaptureFor(readAudioPreferences()),
     publishDefaults: voicePublish,
   }),
   createProcessor: createNoiseProcessor,

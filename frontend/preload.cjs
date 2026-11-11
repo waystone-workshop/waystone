@@ -20,4 +20,6 @@ contextBridge.exposeInMainWorld("waystone", {
   request: (options) => ipcRenderer.invoke("request", options),
   copyContext: (text) => ipcRenderer.invoke("copy-context", text),
   saveExport: (options) => ipcRenderer.invoke("save-export", options),
+  desktopSettings: () => ipcRenderer.invoke("desktop-settings"),
+  saveDesktopSettings: (settings) => ipcRenderer.invoke("desktop-settings-save", settings),
 });

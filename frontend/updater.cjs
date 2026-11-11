@@ -35,8 +35,8 @@ function createUpdater({ app, updater, platform, publish, confirmInstall, openRe
     pendingVersion = info.version;
     set({ phase: "downloaded", version: info.version,
       message: replaced
-        ? `Version ${info.version} includes the earlier updates. One restart installs it when you close Waystone.`
-        : "Update ready. It will install when you close Waystone, or you can restart now." });
+        ? `Version ${info.version} includes the earlier updates. One restart installs it, then Waystone opens again.`
+        : "Update ready. Restart Waystone and it installs in the background, then opens again." });
   });
   updater.on("error", () => set({ phase: "error", message: "Couldn't get the update. Try again later." }));
 
@@ -72,7 +72,7 @@ function createUpdater({ app, updater, platform, publish, confirmInstall, openRe
     catch { /* A failed refresh keeps the update already downloaded. */ }
     if (state.phase !== "downloaded") { settling = false; return false; }
     installing = true;
-    updater.quitAndInstall(false, true);
+    updater.quitAndInstall(true, true);
     return true;
   }
 

@@ -14,6 +14,7 @@ try {
       fileURLToPath(new URL("../main.cjs", import.meta.url)),
       `--user-data-dir=${profile}`,
     ],
+    env: { ...process.env, WAYSTONE_E2E: "1" },
   });
   const page = await application.firstWindow();
   await page.waitForLoadState("load");
@@ -97,6 +98,16 @@ try {
   });
   if (errors.length) throw new Error(errors.join("\n"));
   await page.locator("#settings-open").click();
+  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await page.locator('[data-settings-page="audio"]').click();
+  await expect(page.locator("#audio-noise")).toBeVisible();
+  await page.locator('[data-settings-page="system"]').click();
+  await expect(page.locator("#close-to-tray")).toBeChecked();
+  await expect(page.locator("#open-at-login")).not.toBeChecked();
+  await page.locator("#settings-search").fill("password");
+  await expect(page.locator('[data-settings-page="security"]')).toBeVisible();
+  await expect(page.locator('[data-settings-page="audio"]')).toBeHidden();
+  await page.locator("#settings-search").fill("");
   await page.locator("#leave").click();
   await expect(page.locator("#join")).toBeVisible();
   await page.locator("#auth-mode").selectOption("register");
@@ -112,7 +123,8 @@ try {
   await page.locator("#members-open").click();
   await expect(page.locator("#members-list select")).toHaveCount(0);
   await page.locator('[data-close="members-dialog"]').click();
-  await page.locator("#profile-open").click();
+  await page.locator("#settings-open").click();
+  await page.locator('[data-settings-page="security"]').click();
   await page.locator("#current-password").fill("a-long-new-passphrase");
   await page.locator("#new-password").fill("an-updated-passphrase");
   await page.locator("#password-form button").click();

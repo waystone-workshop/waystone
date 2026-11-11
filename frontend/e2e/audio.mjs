@@ -20,7 +20,7 @@ try {
       fileURLToPath(new URL("../main.cjs", import.meta.url)),
       `--user-data-dir=${profile}`, "--use-fake-device-for-media-stream",
       "--autoplay-policy=no-user-gesture-required",
-    ] });
+    ], env: { ...process.env, WAYSTONE_E2E: "1" } });
     clients.push(app);
     const page = await app.firstWindow();
     await page.waitForLoadState("load");

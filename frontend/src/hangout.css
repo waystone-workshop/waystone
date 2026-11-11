@@ -121,8 +121,41 @@ button svg, summary svg, [data-icon] svg { display: block; width: 20px; height: 
 .voice-room-choice small { color: var(--muted); font-size: 10px; }
 .voice-room-delete { background: none; border: 0; font-size: 10px; color: #ce9a8d; }
 #add-voice-room { margin-top: 18px; }
-#settings-dialog { width: 330px; }
-#settings-dialog > button { display: block; width: 100%; margin-top: 12px; text-align: left; }
+#settings-dialog { width: min(1080px, calc(100vw - 48px)); height: min(740px, calc(100vh - 48px)); max-height: none; padding: 0; overflow: hidden; background: #1c1a17; }
+#settings-dialog[open] { display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+.settings-nav { display: flex; flex-direction: column; min-height: 0; padding: 18px 10px 16px; background: #161411; overflow: auto; }
+.settings-user { display: flex; gap: 10px; align-items: center; padding: 0 8px 8px; }
+.settings-user .avatar { width: 36px; height: 36px; font-size: 12px; }
+.settings-user strong { display: block; font-size: 14px; font-weight: 650; }
+.settings-user button { border: 0; background: none; color: var(--accent); padding: 0; font-size: 12px; }
+.settings-nav input[type=search] { margin: 8px 8px 12px; width: calc(100% - 16px); background: #100e0c; border: 0; border-radius: 4px; padding: 8px 10px; }
+.settings-group { margin: 16px 8px 6px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.settings-empty { margin: 8px; color: var(--muted); font-size: 12px; }
+.settings-link { display: block; width: 100%; margin: 1px 0; padding: 7px 10px; border: 0; border-radius: 4px; background: transparent; color: var(--ww-text); text-align: left; font-size: 14px; }
+.settings-link:hover, .settings-link.active { background: #3c342c; }
+.settings-signout { margin-top: auto; border: 0; background: none; text-align: left; padding: 12px 10px 4px; }
+.settings-main { position: relative; min-width: 0; overflow: auto; padding: 58px 48px 36px; background: #24211c; }
+.settings-main h2 { margin: 0 0 8px; font-size: 20px; }
+.settings-intro { max-width: 62ch; margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+.settings-close { position: absolute; top: 14px; right: 16px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; border-top: 1px solid var(--ww-border); }
+.settings-row strong { display: block; font-size: 15px; }
+.settings-row p { margin: 4px 0 0; max-width: 52ch; color: var(--muted); font-size: 12px; }
+.settings-note { color: #d7c3a2; }
+.settings-row select { min-width: 180px; background: var(--ww-surface); color: inherit; border: 1px solid var(--ww-border); border-radius: 6px; padding: 8px; }
+.settings-main form { display: grid; gap: 14px; max-width: 420px; }
+.settings-switch { position: relative; width: 42px; height: 24px; flex: none; }
+.settings-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.settings-knob { position: absolute; inset: 0; border-radius: 999px; background: #3a342c; pointer-events: none; }
+.settings-knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #f4efe6; transition: transform .15s ease; }
+.settings-switch input:checked + .settings-knob { background: #8ea878; }
+.settings-switch input:checked + .settings-knob::after { transform: translateX(18px); }
+.settings-switch input:focus-visible + .settings-knob { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 800px) {
+  #settings-dialog[open] { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .settings-nav { max-height: 220px; }
+  .settings-main { padding: 54px 20px 24px; }
+}
 .profile-popover { display: none; position: fixed; margin: 0; padding: 0; width: min(340px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; border: 1px solid #5a4c39; border-radius: 12px; background: #2b2721; color: var(--ww-text); z-index: 100; }
 .profile-popover:popover-open, .profile-popover.is-open { display: block; }
 .profile-close { position: absolute; top: 8px; right: 8px; z-index: 1; background: #201e1bcc; color: var(--ww-text); width: 30px; height: 30px; }
