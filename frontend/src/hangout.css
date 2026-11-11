@@ -14,6 +14,20 @@
   --accent: var(--ww-accent);
 }
 body { background: var(--ww-bg); font-family: var(--ww-font-sans, "Segoe UI", sans-serif); font-size: 15px; line-height: 1.5; }
+#join.gate { max-width: none; min-height: 100dvh; margin: 0; padding: 28px 56px 48px; display: flex; flex-direction: column; background: radial-gradient(900px 420px at 12% -10%, #3a2d22 0%, transparent 60%), var(--ww-bg); }
+.gate-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 0 22px; border-bottom: 1px solid var(--ww-border); }
+.gate-layout { flex: 1; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, 420px); gap: 56px; align-items: center; }
+.gate-eyebrow { margin: 0 0 12px; color: var(--ww-accent); letter-spacing: .16em; text-transform: uppercase; font-size: 12px; }
+.gate-copy h1 { margin: 0 0 18px; font-size: clamp(52px, 6vw, 84px); line-height: .95; }
+.gate-lede { max-width: 34rem; margin: 0; font-size: 18px; color: var(--ww-text-muted); }
+.gate-card { background: var(--ww-surface); border: 1px solid var(--ww-border); border-radius: 18px; padding: 28px; box-shadow: 0 24px 60px rgb(0 0 0 / 28%); }
+.gate-card label { display: grid; gap: 6px; margin-top: 14px; font-size: 13px; color: var(--ww-text-muted); }
+.gate-card input, .gate-card select { width: 100%; padding: 12px; border: 1px solid var(--ww-border); border-radius: 8px; background: var(--ww-bg); color: inherit; }
+.gate-status { margin: 0; min-height: 8rem; display: grid; align-content: center; }
+#join .primary { width: 100%; margin-top: 18px; }
+#auth-hint { margin: 14px 0 0; }
+#connection-settings { margin-top: 8px; }
+@media (max-width: 900px) { #join.gate { padding: 22px; } .gate-layout { grid-template-columns: 1fr; gap: 28px; align-items: start; } .gate-copy h1 { font-size: 48px; } }
 button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--ww-focus); outline-offset: 3px; }
 button:disabled { cursor: default; }
 button svg, summary svg, [data-icon] svg { display: block; width: 20px; height: 20px; flex: 0 0 auto; }

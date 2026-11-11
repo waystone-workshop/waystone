@@ -114,7 +114,7 @@ test("offline board editor arranges references, connects ideas, undoes changes a
   }
   try {
     w.eval(await readFile(new URL("../dist/app.js", import.meta.url), "utf8"));
-    $("local-canvases").click();
+    $("workspace-canvases").click();
     await poll(() => $("canvas-library").open);
     $("canvas-grid")
       .querySelector(`[data-canvas-id="${existingBoard.id}"]`)

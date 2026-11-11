@@ -72,7 +72,7 @@ test("Canvases work offline: save, reopen, edit, undo/redo, duplicate, file roun
     };
     w.eval(bundle);
     const $ = (id) => w.document.getElementById(id);
-    $("local-canvases").click();
+    $("workspace-canvases").click();
     await poll(() => $("canvas-library").open);
     return { w, $ };
   }

@@ -48,7 +48,10 @@ code in checked-in commands. Additional admins can then be appointed in the UI.
 ## Sessions and rollout
 
 Opaque random tokens expire after seven days; only SHA-256 token hashes are stored
-in SQLite. The desktop holds its current token only in memory. Logout deletes
+in SQLite. The desktop remembers the current token in the user profile, sealed
+with the operating system when that is available, and never stores the password.
+Opening the app sends that token to `GET /api/me` before the workspace appears.
+A rejected or missing token stays on the sign-in page. Logout deletes
 that session and disconnects its sockets. Password change requires the current
 password, revokes every session, and disconnects sockets across devices. Socket
 channels also check expiry/revocation every minute. Usernames cannot currently

@@ -210,6 +210,43 @@ $("board-dialog").addEventListener("close", () => {
   $("open-channel-board").classList.remove("active"); $("open-channel-board").setAttribute("aria-pressed", "false");
 });
 $("conversation-view").onclick = () => { if ($("board-dialog").open) $("board-close").click(); };
+function authRejected(error) {
+  return /sign in again|Unauthorized|401/.test(error.message);
+}
+async function rememberSession(user) {
+  localStorage.setItem("waystone-preferences", JSON.stringify({ server, name: user.username }));
+  await window.waystone.saveSession?.({ server, token, username: user.username });
+}
+async function beginSession(user) {
+  applyUser(user);
+  $("invite").value = "";
+  $("password").value = "";
+  await rememberSession(user);
+  socket = new Socket(server.replace(/^http/, "ws") + "/socket", { params: { token } });
+  socket.onOpen(() => { $("connection").textContent = "Connected"; });
+  socket.onClose(() => { $("connection").textContent = "Reconnecting…"; profiles.setPresence({}, false); });
+  socket.onError(() => { $("connection").textContent = "Connection interrupted"; });
+  socket.connect();
+  await loadChannels();
+  directory = socket.channel("directory", {});
+  const presence = new Presence(directory);
+  presence.onSync(() => { profiles.setPresence(presence.state); pushVoicePresence(); });
+  directory.on("profile_updated", () => profiles.refresh().catch(report));
+  directory.on("voice_rooms_updated", () => loadVoiceRooms().catch(report));
+  directory.on("channel_created", () => loadChannels().catch(report));
+  directory.on("channel_deleted", () => loadChannels().catch(report));
+  directory.on("board_updated", (event) => {
+    if (event.channel_id === channelId)
+      notify("The channel board was updated. Open it again to load the latest saved version.");
+  });
+  directory.join().receive("ok", () => { lastVoiceState = null; loadChannels().catch(report); profiles.refresh().catch(report); });
+  await profiles.refresh();
+  await loadVoiceRooms();
+  $("gate-status").hidden = true;
+  $("join").hidden = true;
+  $("workspace").hidden = false;
+  notify("");
+}
 $("join-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = event.submitter || $("join-form").querySelector("button");
@@ -221,53 +258,44 @@ $("join-form").addEventListener("submit", async (event) => {
       body: { username: $("name").value, password: $("password").value, display_name: $("display-name").value.trim() || $("name").value, invite_code: register ? $("invite").value : undefined },
     });
     token = result.token;
-    applyUser(result.user);
-    $("invite").value = "";
-    $("password").value = "";
-    localStorage.setItem(
-      "waystone-preferences",
-      JSON.stringify({ server, name: result.user.username }),
-    );
-    socket = new Socket(server.replace(/^http/, "ws") + "/socket", {
-      params: { token },
-    });
-    socket.onOpen(() => {
-      $("connection").textContent = "Connected";
-    });
-    socket.onClose(() => {
-      $("connection").textContent = "Reconnecting…";
-      profiles.setPresence({}, false);
-    });
-    socket.onError(() => {
-      $("connection").textContent = "Connection interrupted";
-    });
-    socket.connect();
-    await loadChannels();
-    directory = socket.channel("directory", {});
-    const presence = new Presence(directory);
-    presence.onSync(() => { profiles.setPresence(presence.state); pushVoicePresence(); });
-    directory.on("profile_updated", () => profiles.refresh().catch(report));
-    directory.on("voice_rooms_updated", () => loadVoiceRooms().catch(report));
-    directory.on("channel_created", () => loadChannels().catch(report));
-    directory.on("channel_deleted", () => loadChannels().catch(report));
-    directory.on("board_updated", (event) => {
-      if (event.channel_id === channelId)
-        notify(
-          "The channel board was updated. Open it again to load the latest saved version.",
-        );
-    });
-    directory.join().receive("ok", () => { lastVoiceState = null; loadChannels().catch(report); profiles.refresh().catch(report); });
-    await profiles.refresh();
-    await loadVoiceRooms();
-    $("join").hidden = true;
-    $("workspace").hidden = false;
-    notify("");
+    await beginSession(result.user);
   } catch (error) {
     report(error);
   } finally {
     button.disabled = false;
   }
 });
+async function restoreSession() {
+  if (!window.waystone?.loadSession) return;
+  $("join-form").hidden = true;
+  $("gate-status").hidden = false;
+  $("gate-status").textContent = "Checking your sign-in…";
+  let saved = null;
+  try { saved = await window.waystone.loadSession(); } catch { saved = null; }
+  if (!saved?.token) {
+    $("join-form").hidden = false;
+    $("gate-status").hidden = true;
+    return;
+  }
+  try {
+    server = policy.validateServer(saved.server);
+    token = saved.token;
+    $("server").value = server;
+    if (saved.username) $("name").value = saved.username;
+    await beginSession(await api("/me"));
+  } catch (error) {
+    if (authRejected(error)) {
+      token = null;
+      await window.waystone.clearSession?.().catch(() => {});
+    }
+    if ($("workspace").hidden) {
+      $("join-form").hidden = false;
+      $("gate-status").hidden = true;
+    }
+    if (!authRejected(error)) report(error);
+  }
+}
+restoreSession();
 async function loadChannels() {
   const listVersion = ++channelListVersion;
   const sessionToken = token;
@@ -790,6 +818,7 @@ async function signOut(revoke = true) {
   saveDraft();
   socket?.disconnect();
   token = null;
+  await window.waystone.clearSession?.().catch(() => {});
   currentUser = null;
   profiles.clear(); directory = null; activeVoiceRoom = null; lastVoiceState = null; voiceRooms = []; spaces = [];
   for (const id of ["profile-dialog", "members-dialog", "public-profile-dialog", "settings-dialog", "space-dialog", "voice-dialog", "voice-create-dialog"]) $(id).close();
@@ -803,6 +832,8 @@ async function signOut(revoke = true) {
   imageUrls = [];
   imageCache.clear();
   $("workspace").hidden = true;
+  $("join-form").hidden = false;
+  $("gate-status").hidden = true;
   $("join").hidden = false;
   notify("");
 }

@@ -25,42 +25,48 @@
         <button id="update-install" class="primary" hidden>Restart and install</button>
       </div>
     </section>
-    <section id="join" class="join">
-      <div class="wordmark"><img src="dist/design-system/assets/mark.svg" alt="" width="22" height="22" /> WAYSTONE</div>
-      <h1>Your people.<br />Your place.</h1>
-      <p>Pick up where you left off.</p>
-
-      <button id="local-canvases" class="offline-entry">
-        Open local Canvases →
-      </button>
-      <form id="join-form">
-        <label>Welcome back<select id="auth-mode"><option value="login">Sign in</option><option value="register">Create an account</option></select></label>
-        <details id="connection-settings"><summary>Connection settings</summary><label
-          >Server<input
-            id="server"
-            type="url"
-            placeholder="https://mars.example.com"
-            required
-        /></label></details>
-        <label
-          >Username<input
-            id="name"
-            maxlength="24"
-            required
-            autocomplete="username"
-        /></label>
-        <label>Password<input id="password" type="password" required minlength="12" maxlength="128" autocomplete="current-password" /></label>
-        <label id="display-name-field" hidden>Display name<input id="display-name" maxlength="24" autocomplete="nickname" /></label>
-        <label id="invite-field" hidden
-          >Invitation code<input
-            id="invite"
-            type="password"
-            autocomplete="off"
-        /></label>
-        <button class="primary" id="auth-submit">Sign in →</button>
-      </form>
-      <p id="auth-hint">Your account stays with you. Sign in with your username and password.</p>
-      <p><button id="check-updates" type="button">Check for updates</button></p>
+    <section id="join" class="gate">
+      <header class="gate-bar">
+        <div class="wordmark"><img src="dist/design-system/assets/mark.svg" alt="" width="22" height="22" /> WAYSTONE</div>
+        <button id="check-updates" type="button">Check for updates</button>
+      </header>
+      <div class="gate-layout">
+        <div class="gate-copy">
+          <p class="gate-eyebrow">A place for your people</p>
+          <h1>Your people.<br />Your place.</h1>
+          <p class="gate-lede">Talk, draw, and hang out in the room you share. Sign in once on this PC, and Waystone checks that sign-in each time it opens.</p>
+        </div>
+        <div class="gate-card">
+          <p id="gate-status" class="gate-status" role="status" hidden>Checking your sign-in…</p>
+          <form id="join-form">
+            <label>Account<select id="auth-mode"><option value="login">Sign in</option><option value="register">Create an account</option></select></label>
+            <details id="connection-settings"><summary>Connection settings</summary><label
+              >Server<input
+                id="server"
+                type="url"
+                placeholder="https://mars.example.com"
+                required
+            /></label></details>
+            <label
+              >Username<input
+                id="name"
+                maxlength="24"
+                required
+                autocomplete="username"
+            /></label>
+            <label>Password<input id="password" type="password" required minlength="12" maxlength="128" autocomplete="current-password" /></label>
+            <label id="display-name-field" hidden>Display name<input id="display-name" maxlength="24" autocomplete="nickname" /></label>
+            <label id="invite-field" hidden
+              >Invitation code<input
+                id="invite"
+                type="password"
+                autocomplete="off"
+            /></label>
+            <button class="primary" id="auth-submit">Sign in →</button>
+            <p id="auth-hint">Your account stays with you. Sign in with your username and password.</p>
+          </form>
+        </div>
+      </div>
     </section>
     <main id="workspace" hidden>
       <header class="app-masthead">

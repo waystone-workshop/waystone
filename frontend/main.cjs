@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, Tray, Menu, nativeImage } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, Tray, Menu, nativeImage, safeStorage } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { createUpdater } = require("./updater.cjs");
 const { normalizeDesktopSettings, mergeDesktopSettings, hideOnClose } = require("./desktop-settings.cjs");
+const { prepareSession, readStoredSession } = require("./session-store.cjs");
 const { join } = require("node:path");
-const { writeFile, readFile, stat } = require("node:fs/promises");
+const { writeFile, readFile, stat, unlink } = require("node:fs/promises");
 const { pathToFileURL } = require("node:url");
 const { validateServer, validatePath } = require("./policy.cjs");
 const { allowMicrophone } = require("./media-policy.cjs");
@@ -83,6 +84,19 @@ app.whenReady().then(async () => {
   app.on("second-instance", () => showWindow());
   app.on("before-quit", (event) => {
     if (!event.defaultPrevented) quitting = true;
+  });
+  ipcMain.handle("session-load", async (event) => { trusted(event); return loadSession(); });
+  ipcMain.handle("session-save", async (event, value) => {
+    trusted(event);
+    const stored = prepareSession(value, protectToken);
+    if (!stored) throw new Error("Invalid session");
+    await writeFile(sessionPath(), JSON.stringify(stored));
+    return { remembered: true };
+  });
+  ipcMain.handle("session-clear", async (event) => {
+    trusted(event);
+    await unlink(sessionPath()).catch((error) => { if (error.code !== "ENOENT") throw error; });
+    return { remembered: false };
   });
   ipcMain.handle("desktop-settings", (event) => { trusted(event); return publicDesktop(); });
   ipcMain.handle("desktop-settings-save", async (event, patch) => {
@@ -216,6 +230,19 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => { if (!trayWanted() || quitting) app.quit(); });
 app.on("activate", () => showWindow());
 
+function sessionPath() { return join(app.getPath("userData"), "session.json"); }
+function protectToken(token) {
+  if (!safeStorage.isEncryptionAvailable()) return { sealed: false, token };
+  return { sealed: true, token: safeStorage.encryptString(token).toString("base64") };
+}
+async function loadSession() {
+  try {
+    return readStoredSession(JSON.parse(await readFile(sessionPath(), "utf8")), (packed) =>
+      safeStorage.decryptString(Buffer.from(packed, "base64")));
+  } catch {
+    return null;
+  }
+}
 function desktopPath() { return join(app.getPath("userData"), "desktop-settings.json"); }
 async function loadDesktopSettings() {
   try { return normalizeDesktopSettings(JSON.parse(await readFile(desktopPath(), "utf8"))); }

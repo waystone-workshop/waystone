@@ -16,10 +16,13 @@ try {
     ],
     env: { ...process.env, WAYSTONE_E2E: "1" },
   });
-  const page = await application.firstWindow();
+  let page = await application.firstWindow();
   await page.waitForLoadState("load");
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await expect(page.locator("#name")).toBeVisible();
+  await expect(page.locator("#local-canvases")).toHaveCount(0);
+  await page.screenshot({ path: fileURLToPath(new URL("../../tmp/waystone-gate.png", import.meta.url)) });
   await page.locator("#connection-settings summary").click();
   await page.locator("#server").fill(origin);
   await page.locator("#name").fill("Ada");
@@ -27,6 +30,22 @@ try {
   await page.locator("#join-form button").click();
   await expect(page.locator("#workspace")).toBeVisible();
   await expect(page.locator("#messages")).toContainText("Let’s plan");
+  const sessionRequests = () => requests.filter((url) => url === "/api/session").length;
+  const identityRequests = () => requests.filter((url) => url === "/api/me").length;
+  const sessionsBefore = sessionRequests();
+  const identitiesBefore = identityRequests();
+  await application.close();
+  application = await electron.launch({
+    args: [fileURLToPath(new URL("../main.cjs", import.meta.url)), `--user-data-dir=${profile}`],
+    env: { ...process.env, WAYSTONE_E2E: "1" },
+  });
+  page = await application.firstWindow();
+  await page.waitForLoadState("load");
+  page.on("pageerror", (error) => errors.push(error.message));
+  await expect(page.locator("#workspace")).toBeVisible();
+  await expect(page.locator("#join")).toBeHidden();
+  expect(identityRequests()).toBeGreaterThan(identitiesBefore);
+  expect(sessionRequests()).toBe(sessionsBefore);
   await expect(page.locator("#people-online .person-row")).toHaveCount(2);
   await page.locator("#members-collapse").click();
   await expect(page.locator("#people-panel")).toBeHidden();
