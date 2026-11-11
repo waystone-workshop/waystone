@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { AudioCall } from "../src/audio.mjs";
-import { microphoneConstraints, voiceCapture, voicePublish } from "../src/audio-quality.mjs";
+import { microphoneConstraints, voiceCapture, voiceCaptureFor, voicePublish } from "../src/audio-quality.mjs";
 import { allowMicrophone } from "../media-policy.cjs";
 
 function fixture(credentials = async () => ({ url: "ws://127.0.0.1:7880", token: "token" })) {
@@ -146,6 +146,41 @@ test("platform voice isolation is not stacked with the noise model", async () =>
   await f.call.join(1);
   assert.equal(used, false);
   assert.equal(f.snapshot.state, "connected");
+});
+
+test("voice preferences keep one suppressor unless the listener turns it off", () => {
+  assert.equal(voiceCaptureFor().noiseSuppression, true);
+  assert.deepEqual(voiceCaptureFor().voiceIsolation, voiceCapture.voiceIsolation);
+  const quiet = voiceCaptureFor({ noiseSuppression: false, echoCancellation: false, deviceId: "mic-9" });
+  assert.equal(quiet.noiseSuppression, false);
+  assert.equal(quiet.echoCancellation, false);
+  assert.equal(quiet.voiceIsolation, undefined);
+  assert.equal(quiet.deviceId, "mic-9");
+});
+
+test("turning noise suppression off skips the noise model", async () => {
+  const store = globalThis.localStorage;
+  const values = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  };
+  globalThis.localStorage.setItem("waystone-audio", JSON.stringify({ noiseSuppression: false }));
+  try {
+    let used = false;
+    const f = microphone({
+      getSourceTrackSettings: () => ({}),
+      setProcessor: async () => { used = true; },
+      applyConstraints: async () => {},
+    });
+    await f.call.join(1);
+    assert.equal(used, false);
+    assert.equal(f.snapshot.state, "connected");
+  } finally {
+    if (store) globalThis.localStorage = store;
+    else delete globalThis.localStorage;
+  }
 });
 
 test("the noise model replaces browser suppression and a failure restores it", async () => {

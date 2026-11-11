@@ -13,12 +13,16 @@ pin in the app release workflow, then release the combined artifacts.
 
 Friends access https://mars.tail1d39aa.ts.net through Tailscale. Download the
 Windows installer once from the landing page, then create an account inside the
-updated desktop with username/password/invitation code. The landing page's
-registration section is informational; accounts are provided by the app/API.
+updated desktop with username/password/invitation code. That first setup is one
+progress step for the current user, then Waystone opens. It does not ask for a
+folder or an admin account. The landing page's registration section is
+informational; accounts are provided by the app/API.
 See [accounts and roles](accounts.md) for first-admin assignment and permissions.
 
 Windows clients check for stable updates at startup and every six hours, download
-in the background, and install on normal exit. A downloaded update does not stop
+in the background, and install silently on normal exit. Waystone then opens again.
+Hiding the window to the tray is not an exit: Quit from the tray icon installs a
+downloaded update. A downloaded update does not stop
 later checks. If a newer release is published before that restart, Waystone
 downloads the newer installer and installs only that one. Each release is a full
 installer, so the latest one already contains the earlier updates. They do not

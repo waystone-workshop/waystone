@@ -1,4 +1,4 @@
-import { microphoneConstraints } from "./audio-quality.mjs";
+import { microphoneConstraints, readAudioPreferences } from "./audio-quality.mjs";
 
 // A call owns its room, microphone, and playback elements until leave().
 export class AudioCall {
@@ -34,6 +34,7 @@ export class AudioCall {
 
   async join(channelId) {
     if (this.state !== "idle") return;
+    this.audioPreferences = readAudioPreferences();
     const version = ++this.version;
     this.state = "joining";
     this.update();
@@ -98,7 +99,7 @@ export class AudioCall {
   }
 
   async enhanceMicrophone(room) {
-    if (!this.createProcessor) return;
+    if (this.audioPreferences?.noiseSuppression === false || !this.createProcessor) return;
     const publication = room.localParticipant.getTrackPublication?.(this.microphoneSource);
     const track = publication?.track;
     if (!track?.setProcessor) return;
@@ -107,11 +108,11 @@ export class AudioCall {
     // removes consonants instead of noise.
     if (settings.voiceIsolation) return;
     try {
-      await track.applyConstraints(microphoneConstraints(settings, false));
+      await track.applyConstraints(microphoneConstraints(settings, false, this.audioPreferences));
       if (room !== this.room) return;
       await track.setProcessor(this.createProcessor());
     } catch {
-      if (room === this.room) await track.applyConstraints(microphoneConstraints(settings, true)).catch(() => {});
+      if (room === this.room) await track.applyConstraints(microphoneConstraints(settings, true, this.audioPreferences)).catch(() => {});
     }
   }
 

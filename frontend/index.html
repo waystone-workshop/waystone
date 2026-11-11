@@ -88,7 +88,59 @@
     <dialog id="space-dialog" class="picker-dialog"><div class="picker-heading"><h2>Find your space</h2><button data-close="space-dialog" class="icon-button" aria-label="Close space picker" data-icon="close"></button></div><label class="sr-only" for="space-search">Search spaces</label><input id="space-search" type="search" placeholder="Search spaces…" autocomplete="off" /><nav id="channels" aria-label="Text spaces"></nav><p id="space-no-results" hidden>No spaces match your search.</p><button id="add-channel">Create a space</button></dialog>
     <dialog id="voice-dialog" class="picker-dialog"><div class="picker-heading"><h2>A place to hang out</h2><button data-close="voice-dialog" class="icon-button" aria-label="Close voice rooms" data-icon="close"></button></div><p class="subtle">Voice stays with you while you move between spaces.</p><div id="voice-rooms"></div><button id="add-voice-room">Create a voice room</button></dialog>
     <dialog id="voice-create-dialog"><form id="voice-create-form"><h2>A new gathering spot</h2><label>Room name<input id="voice-room-name" required maxlength="40" pattern="[a-z0-9][a-z0-9-]{0,39}" placeholder="late-night-party" /></label><div class="actions"><button type="button" data-close="voice-create-dialog">Cancel</button><button class="primary">Create room</button></div></form></dialog>
-    <dialog id="settings-dialog" class="account-dialog"><div class="picker-heading"><h2>Your corner</h2><button data-close="settings-dialog" class="icon-button" aria-label="Close settings" data-icon="close"></button></div><button id="settings-profile">Edit profile</button><button id="workspace-updates">Check for updates</button><button id="leave" class="danger-text">Sign out</button></dialog>
+    <dialog id="settings-dialog" class="settings-shell" aria-label="Settings">
+      <nav class="settings-nav" aria-label="Settings sections">
+        <div class="settings-user">
+          <span id="settings-avatar"></span>
+          <div><strong id="settings-name">Your account</strong><button id="settings-profile" type="button" data-edit-profile>Edit profile</button></div>
+        </div>
+        <label class="sr-only" for="settings-search">Search settings</label>
+        <input id="settings-search" type="search" placeholder="Search" autocomplete="off" />
+        <p id="settings-empty" class="settings-empty" hidden>No settings match your search.</p>
+        <p class="settings-group" data-settings-group="user">User settings</p>
+        <button type="button" class="settings-link active" data-settings-page="account" data-settings-group="user" data-settings-keywords="profile username display name role">Account</button>
+        <button type="button" class="settings-link" data-settings-page="security" data-settings-group="user" data-settings-keywords="password sign out devices">Password &amp; security</button>
+        <p class="settings-group" data-settings-group="audio">Audio settings</p>
+        <button type="button" class="settings-link" data-settings-page="audio" data-settings-group="audio" data-settings-keywords="voice microphone noise echo gain input">Voice</button>
+        <p class="settings-group" data-settings-group="system">System</p>
+        <button type="button" class="settings-link" data-settings-page="system" data-settings-group="system" data-settings-keywords="close tray startup windows login updates">System</button>
+        <button id="leave" type="button" class="danger-text settings-signout">Sign out</button>
+      </nav>
+      <div class="settings-main">
+        <button data-close="settings-dialog" class="settings-close icon-button" aria-label="Close settings" data-icon="close"></button>
+        <section data-settings-panel="account">
+          <h2>Account</h2>
+          <p class="settings-intro">Your username and password are how you get back in. Your display name, picture, and the line about you are what everyone else sees.</p>
+          <div class="settings-row"><div><strong>Display name</strong><p id="settings-display"></p></div><button type="button" data-edit-profile>Edit</button></div>
+          <div class="settings-row"><div><strong>Username</strong><p id="settings-username"></p></div></div>
+          <div class="settings-row"><div><strong>Role</strong><p id="settings-role"></p></div></div>
+        </section>
+        <section data-settings-panel="security" hidden>
+          <h2>Password &amp; security</h2>
+          <p class="settings-intro">Changing your password signs you out on every device.</p>
+          <form id="password-form">
+            <label>Current password<input id="current-password" type="password" required maxlength="128" autocomplete="current-password" /></label>
+            <label>New password<input id="new-password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
+            <button type="submit">Change password and sign out</button>
+          </form>
+        </section>
+        <section data-settings-panel="audio" hidden>
+          <h2>Voice</h2>
+          <p class="settings-intro">Calls use one noise suppressor, echo cancellation, and 64 kbps speech. These choices apply the next time you join a voice room.</p>
+          <div class="settings-row"><div><strong>Microphone</strong><p>The input used when you join voice.</p></div><select id="audio-device" aria-label="Microphone"><option value="">Default microphone</option></select></div>
+          <div class="settings-row"><div><strong>Noise suppression</strong><p>Automatic uses the system voice isolation when this PC has it, and Waystone’s noise model otherwise.</p></div><select id="audio-noise" aria-label="Noise suppression"><option value="automatic">Automatic</option><option value="off">Off</option></select></div>
+          <div class="settings-row"><div><strong>Echo cancellation</strong><p>Keeps the room from hearing itself through your speakers.</p></div><label class="settings-switch"><input id="audio-echo" type="checkbox" role="switch" checked /><span class="settings-knob"></span><span class="sr-only">Echo cancellation</span></label></div>
+          <div class="settings-row"><div><strong>Automatic gain</strong><p>Evens out a quiet or loud microphone.</p></div><label class="settings-switch"><input id="audio-gain" type="checkbox" role="switch" checked /><span class="settings-knob"></span><span class="sr-only">Automatic gain</span></label></div>
+        </section>
+        <section data-settings-panel="system" hidden>
+          <h2>System</h2>
+          <p class="settings-intro">Waystone can stay available without sitting in the taskbar.</p>
+          <div class="settings-row"><div><strong>Close to the tray</strong><p>The close button hides Waystone beside the clock. Voice stays connected. Quit from the tray icon when you want to leave, which is also when a downloaded update installs.</p></div><label class="settings-switch"><input id="close-to-tray" type="checkbox" role="switch" checked /><span class="settings-knob"></span><span class="sr-only">Close to the tray</span></label></div>
+          <div class="settings-row"><div><strong>Start with Windows</strong><p>Open Waystone when you sign in to this PC.</p><p id="startup-note" class="settings-note" hidden>The installed app uses this switch. A development window does not register itself at startup.</p></div><label class="settings-switch"><input id="open-at-login" type="checkbox" role="switch" /><span class="settings-knob"></span><span class="sr-only">Start with Windows</span></label></div>
+          <div class="settings-row"><div><strong>Updates</strong><p>Waystone checks in the background. A restart installs the newest release and opens the app again.</p></div><button id="workspace-updates" type="button">Check for updates</button></div>
+        </section>
+      </div>
+    </dialog>
     <section id="profile-popover" class="profile-popover" popover="auto" aria-label="User profile"><button id="profile-popover-close" class="profile-close icon-button" aria-label="Close profile" data-icon="close"></button><div id="profile-card"></div><button id="view-full-profile">View profile <span data-icon="arrow"></span></button></section>
 
     <dialog id="members-dialog" class="account-dialog">
@@ -106,12 +158,6 @@
         <label>A little about you<textarea id="profile-bio" maxlength="280" rows="3" placeholder="Your next adventure, favorite game, or current obsession…"></textarea></label>
         <label>Avatar color<select id="profile-color"><option value="pine">Pine</option><option value="amber">Amber</option><option value="slate">Slate</option><option value="berry">Berry</option></select></label>
         <button class="primary">Save profile</button>
-      </form>
-      <hr /><h3>Change password</h3><p>Changing your password signs you out on all devices.</p>
-      <form id="password-form">
-        <label>Current password<input id="current-password" type="password" required maxlength="128" autocomplete="current-password" /></label>
-        <label>New password<input id="new-password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" /></label>
-        <button>Change password and sign out</button>
       </form>
     </dialog>
     <dialog id="channel-dialog">

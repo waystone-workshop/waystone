@@ -5,14 +5,14 @@ import { createUpdater } from "../updater.cjs";
 
 function setup({ packaged = true, platform = "win32" } = {}) {
   const updater = new EventEmitter();
-  let checks = 0, installs = 0, opened;
+  let checks = 0, installs = 0, opened, installerArgs;
   updater.checkForUpdates = async () => { checks++; return {}; };
-  updater.quitAndInstall = () => { installs++; };
+  updater.quitAndInstall = (...args) => { installs++; installerArgs = args; };
   const controller = createUpdater({
     app: { isPackaged: packaged, getVersion: () => "0.4.1" }, updater, platform,
     publish() {}, confirmInstall: async () => true, openRelease: async (url) => { opened = url; },
   });
-  return { updater, controller, get checks() { return checks; }, get installs() { return installs; }, get opened() { return opened; } };
+  return { updater, controller, get checks() { return checks; }, get installs() { return installs; }, get opened() { return opened; }, get installerArgs() { return installerArgs; } };
 }
 
 test("Windows downloads automatically and installs on normal quit without interrupting a session", async () => {
@@ -27,6 +27,7 @@ test("Windows downloads automatically and installs on normal quit without interr
   assert.equal(f.controller.status().phase, "downloaded");
   assert.equal(await f.controller.install(), true);
   assert.equal(f.installs, 1);
+  assert.deepEqual(f.installerArgs, [true, true]);
 });
 
 test("development does not access releases and download failures are caught", async () => {
@@ -50,6 +51,7 @@ test("a newer release replaces a downloaded update and quit installs only the la
   let latest = "0.6.1";
   const updater = new EventEmitter();
   let installs = 0;
+  let installerArgs;
   updater.autoDownload = true;
   updater.checkForUpdates = async () => {
     const version = latest;
@@ -57,7 +59,7 @@ test("a newer release replaces a downloaded update and quit installs only the la
     const downloadPromise = Promise.resolve().then(() => updater.emit("update-downloaded", { version }));
     return { updateInfo: { version }, downloadPromise };
   };
-  updater.quitAndInstall = () => { installs++; };
+  updater.quitAndInstall = (...args) => { installs++; installerArgs = args; };
   const controller = createUpdater({
     app, updater, platform: "win32", publish() {}, confirmInstall: async () => true, openRelease: async () => {},
   });
@@ -72,6 +74,7 @@ test("a newer release replaces a downloaded update and quit installs only the la
   app.quit();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(installs, 1);
+  assert.deepEqual(installerArgs, [true, true]);
   assert.equal(controller.status().version, "0.6.2");
 });
 

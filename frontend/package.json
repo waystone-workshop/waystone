@@ -1,6 +1,6 @@
 {
   "name": "waystone-desktop",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "private": true,
   "repository": {
     "type": "git",
@@ -44,6 +44,7 @@
       "main.cjs",
       "updater.cjs",
       "preload.cjs",
+      "desktop-settings.cjs",
       "index.html",
       "src/style.css",
       "src/hangout.css",
@@ -62,8 +63,9 @@
       "artifactName": "Waystone-Setup.${ext}"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true
     },
     "mac": {
       "icon": "build/icon.png",

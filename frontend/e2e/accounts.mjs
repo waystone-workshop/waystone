@@ -32,7 +32,7 @@ backend.stdout.on("data", (chunk) => { output += chunk; });
 backend.stderr.on("data", (chunk) => { output += chunk; });
 try {
   await expect.poll(() => output.includes("ACCOUNTS_TEST_READY"), { timeout: 60000 }).toBe(true);
-  app = await electron.launch({ args: [fileURLToPath(new URL("../main.cjs", import.meta.url)), `--user-data-dir=${join(temp, "desktop")}`] });
+  app = await electron.launch({ args: [fileURLToPath(new URL("../main.cjs", import.meta.url)), `--user-data-dir=${join(temp, "desktop")}`], env: { ...process.env, WAYSTONE_E2E: "1" } });
   const page = await app.firstWindow(); await page.waitForLoadState("load");
   await page.locator("#connection-settings summary").click();
   await page.locator("#server").fill(origin);
@@ -132,6 +132,9 @@ try {
   await page.locator('[data-close="space-dialog"]').click();
   await page.locator("#profile-open").click();
   await expect(page.locator("#profile-bio")).toHaveValue("Actual persisted profile");
+  await page.locator('[data-close="profile-dialog"]').click();
+  await page.locator("#settings-open").click();
+  await page.locator('[data-settings-page="security"]').click();
   await page.locator("#current-password").fill(password);
   await page.locator("#new-password").fill(password + "-updated");
   await page.locator("#password-form button").click(); await expect(page.locator("#join")).toBeVisible();
