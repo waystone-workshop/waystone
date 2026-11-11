@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
+import { animatedGif } from "../test/support/profile-gif.mjs";
 
 const temp = await mkdtemp(join(tmpdir(), "waystone-accounts-"));
 const listener = createServer();
@@ -65,6 +66,26 @@ try {
   await page.locator("#avatar-upload").setInputFiles({ name: "avatar.png", mimeType: "image/png", buffer: Buffer.from(art.avatar, "base64") });
   await expect(page.locator("#profile-upload-status")).toHaveText("Avatar saved.");
   await expect(page.locator("#profile-edit-avatar img")).toBeVisible();
+  if (process.env.WAYSTONE_TEST_LARGE_MEDIA === "1") {
+    for (const [kind, size] of [["avatar", 10], ["banner", 20]]) {
+      const buffer = animatedGif(size * 1024 * 1024);
+      await page.locator(`#${kind}-upload`).setInputFiles({ name: `${kind}.gif`, mimeType: "image/gif", buffer });
+      await expect(page.locator("#profile-upload-status")).toHaveText(`${kind === "avatar" ? "Avatar" : "Banner"} saved.`, { timeout: 30000 });
+      await expect(page.locator(`#profile-edit-${kind} img`)).toBeVisible();
+      const decoded = await page.evaluate(async (base64) => {
+        const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        const decoder = new ImageDecoder({ data: bytes, type: "image/gif" });
+        await decoder.tracks.ready;
+        const frames = decoder.tracks.selectedTrack.frameCount;
+        const { image } = await decoder.decode({ frameIndex: 1 }); image.close(); decoder.close(); return frames;
+      }, animatedGif(256).toString("base64"));
+      if (decoded !== 2) throw Error("Animated GIF frames were not retained");
+      await page.locator(`#${kind}-upload`).setInputFiles({ name: "too-large.gif", mimeType: "image/gif", buffer: animatedGif(size * 1024 * 1024 + 1) });
+      await expect(page.locator("#profile-upload-status")).toHaveText(`${kind === "avatar" ? "Avatar" : "Banner"} must be ${size} MB or smaller.`);
+      await expect(page.locator(`#profile-edit-${kind} img`)).toBeVisible();
+    }
+    console.log("Large profile media passed: 10 MB avatar and 20 MB banner GIFs upload, render, and retain two animation frames.");
+  }
   await page.locator("#profile-form button").click();
   await expect(page.locator("#identity")).toContainText("Mountain Mage");
   await expect(page.locator("#profile-dialog")).not.toBeVisible();

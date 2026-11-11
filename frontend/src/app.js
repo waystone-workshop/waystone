@@ -2,8 +2,10 @@ import policy from "../policy.cjs";
 import { setupCanvases } from "./canvases.js";
 import { Socket, Presence } from "phoenix";
 import { icon, mountIcons } from "./icons.mjs";
-import { Room, RoomEvent } from "livekit-client";
+import { Room, RoomEvent, Track } from "livekit-client";
 import { AudioCall } from "./audio.mjs";
+import { voiceCapture, voicePublish } from "./audio-quality.mjs";
+import { createNoiseProcessor } from "./noise-processor.mjs";
 import { setupUpdates } from "./updates.mjs";
 import { setupProfiles } from "./profiles.mjs";
 import { mergeMessages, rangeQuery } from "./context.mjs";
@@ -95,9 +97,11 @@ $("auth-mode").onchange = () => {
 };
 const call = new AudioCall({
   createRoom: () => new Room({
-    audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    publishDefaults: { audioPreset: { maxBitrate: 32000 }, dtx: true, red: true },
+    audioCaptureDefaults: voiceCapture,
+    publishDefaults: voicePublish,
   }),
+  createProcessor: createNoiseProcessor,
+  microphoneSource: Track.Source.Microphone,
   events: RoomEvent,
   credentials: (id) => api(`/voice-rooms/${id}/call`, { method: "POST" }),
   audioHost: $("call-audio"),

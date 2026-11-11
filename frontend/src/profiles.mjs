@@ -161,14 +161,17 @@ export function setupProfiles({ document, api, changed, signedOut, report }) {
     $(`${kind}-upload`).onchange = async (event) => {
       const file = event.target.files[0]; if (!file) return;
       event.target.disabled = true;
+      $("profile-upload-status").classList.remove("upload-error");
+      $("profile-upload-status").textContent = `Uploading ${kind}…`;
       try {
-        if (file.size > (kind === "avatar" ? 1 : 2) * 1024 * 1024) throw Error(`${kind === "avatar" ? "Avatar" : "Banner"} is too large.`);
+        const maxMB = kind === "avatar" ? 10 : 20;
+        if (file.size > maxMB * 1024 * 1024) throw Error(`${kind === "avatar" ? "Avatar" : "Banner"} must be ${maxMB} MB or smaller.`);
         const data = await new Promise((resolve, reject) => {
           const reader = new document.defaultView.FileReader(); reader.onerror = () => reject(Error("Could not read image")); reader.onload = () => resolve(reader.result.split(",")[1]); reader.readAsDataURL(file);
         });
         const person = await api(`/me/media/${kind}`, { method: "PUT", body: { data } });
         changed(person); editMedia(person); await refresh(); $("profile-upload-status").textContent = `${kind === "avatar" ? "Avatar" : "Banner"} saved.`;
-      } catch (error) { report(error); } finally { event.target.disabled = false; event.target.value = ""; }
+      } catch (error) { $("profile-upload-status").textContent = error.message; $("profile-upload-status").classList.add("upload-error"); report(error); } finally { event.target.disabled = false; event.target.value = ""; }
     };
     $(`${kind}-remove`).onclick = async () => {
       try { const person = await api(`/me/media/${kind}`, { method: "DELETE" }); changed(person); editMedia(person); await refresh(); $("profile-upload-status").textContent = `${kind} removed.`; } catch (error) { report(error); }

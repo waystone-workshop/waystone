@@ -14,9 +14,7 @@ defmodule Waystone.Chat.Attachments do
 
   defp validate_one(%{"data" => data} = item)
        when is_binary(data) and byte_size(data) <= 7_000_000 do
-    with {:ok, bytes} <- Base.decode64(data),
-         true <- byte_size(bytes) <= @max_bytes,
-         {mime, ext} <- image_type(bytes),
+    with {:ok, _bytes, mime, ext} <- Waystone.Media.decode_image(data, @max_bytes),
          {:ok, reference} <- canvas_reference(item) do
       id = Ecto.UUID.generate()
 
@@ -48,11 +46,4 @@ defmodule Waystone.Chat.Attachments do
       do: {:error, :invalid_canvas_reference},
       else: {:ok, %{}}
   end
-
-  defp image_type(<<137, 80, 78, 71, 13, 10, 26, 10, _::binary>>), do: {"image/png", ".png"}
-  defp image_type(<<255, 216, 255, _::binary>>), do: {"image/jpeg", ".jpg"}
-  defp image_type(<<"GIF87a", _::binary>>), do: {"image/gif", ".gif"}
-  defp image_type(<<"GIF89a", _::binary>>), do: {"image/gif", ".gif"}
-  defp image_type(<<"RIFF", _::binary-size(4), "WEBP", _::binary>>), do: {"image/webp", ".webp"}
-  defp image_type(_), do: :error
 end

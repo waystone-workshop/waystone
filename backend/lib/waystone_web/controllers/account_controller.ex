@@ -65,7 +65,8 @@ defmodule WaystoneWeb.AccountController do
         conn
         |> put_status(422)
         |> json(%{
-          error: "Choose a PNG, JPEG, GIF or WebP. Avatars: 1 MB maximum. Banners: 2 MB maximum."
+          error:
+            "Choose a PNG, JPEG, GIF or WebP. Avatars: 10 MB maximum. Banners: 20 MB maximum."
         })
     end
   end
