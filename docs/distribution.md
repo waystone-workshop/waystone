@@ -18,9 +18,13 @@ registration section is informational; accounts are provided by the app/API.
 See [accounts and roles](accounts.md) for first-admin assignment and permissions.
 
 Windows clients check for stable updates at startup and every six hours, download
-in the background, and install on normal exit. They do not force a restart during
-a call. Users can also choose **Restart and install**. Publish the installer,
-matching `latest.yml`, and blockmaps together; the updater cannot use an EXE alone.
+in the background, and install on normal exit. A downloaded update does not stop
+later checks. If a newer release is published before that restart, Waystone
+downloads the newer installer and installs only that one. Each release is a full
+installer, so the latest one already contains the earlier updates. They do not
+force a restart during a call. Users can also choose **Restart and install**.
+Publish the installer, matching `latest.yml`, and blockmaps together; the updater
+cannot use an EXE alone.
 Unsigned macOS builds offer manual release downloads until Apple signing and
 notarization are configured. Development `npm start` does not self-update.
 
