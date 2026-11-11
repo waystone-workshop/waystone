@@ -23,6 +23,13 @@ releases the microphone. Legacy `/channels/:id/call` remains available for older
 clients; new clients use `/voice-rooms/:id/call`. Old channel calls and new voice
 rooms are separate LiveKit rooms, so friends should update together.
 
+The microphone is captured in mono at 48 kHz with echo cancellation and automatic
+gain. Chromium voice isolation is used when the machine provides it. Otherwise
+the desktop runs RNNoise locally and turns the browser suppressor off, so the
+two models are never stacked. Speech is published as 64 kbps Opus with redundant
+audio frames and without discontinuous transmission, so quiet onsets stay intact.
+A noise-model failure leaves the call on the browser suppressor.
+
 ## People and profiles
 
 Phoenix Presence tracks authenticated directory sockets by immutable user ID.

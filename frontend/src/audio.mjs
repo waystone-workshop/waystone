@@ -1,3 +1,5 @@
+import { microphoneConstraints } from "./audio-quality.mjs";
+
 // A call owns its room, microphone, and playback elements until leave().
 export class AudioCall {
   constructor({ createRoom, events, credentials, changed, failed, audioHost }) {
@@ -83,6 +85,8 @@ export class AudioCall {
       if (!current()) { await room.disconnect(); return; }
       await room.localParticipant.setMicrophoneEnabled(true);
       if (!current()) { await room.disconnect(); return; }
+      await this.enhanceMicrophone(room);
+      if (!current()) { await room.disconnect(); return; }
       this.state = "connected";
       this.update();
     } catch (error) {
@@ -90,6 +94,24 @@ export class AudioCall {
       if (version !== this.version) { await room?.disconnect(); return; }
       this.leave();
       this.failed(new Error("Could not join audio. Check the voice service and microphone permission. " + error.message));
+    }
+  }
+
+  async enhanceMicrophone(room) {
+    if (!this.createProcessor) return;
+    const publication = room.localParticipant.getTrackPublication?.(this.microphoneSource);
+    const track = publication?.track;
+    if (!track?.setProcessor) return;
+    const settings = track.getSourceTrackSettings?.() || {};
+    // The platform model already replaced browser suppression. A second model
+    // removes consonants instead of noise.
+    if (settings.voiceIsolation) return;
+    try {
+      await track.applyConstraints(microphoneConstraints(settings, false));
+      if (room !== this.room) return;
+      await track.setProcessor(this.createProcessor());
+    } catch {
+      if (room === this.room) await track.applyConstraints(microphoneConstraints(settings, true)).catch(() => {});
     }
   }
 

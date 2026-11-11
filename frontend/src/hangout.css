@@ -149,6 +149,7 @@ button svg, summary svg, [data-icon] svg { display: block; width: 20px; height: 
 #profile-edit-avatar { margin: -25px 0 0 16px; position: relative; }
 #profile-edit-avatar .avatar { width: 60px; height: 60px; border: 3px solid var(--ww-bg); }
 #profile-upload-status { font-size: 11px; color: #b4c69a; }
+#profile-upload-status.upload-error { color: var(--ww-danger); }
 #connection-settings { margin: 14px 0; border-bottom: 1px solid var(--ww-border); padding-bottom: 14px; }
 #connection-settings > summary { font-size: 12px; color: var(--muted); cursor: pointer; }
 dialog { background: #25221e; border-color: var(--ww-border); border-radius: 12px; }

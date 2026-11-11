@@ -80,6 +80,9 @@ try {
         const { image } = await decoder.decode({ frameIndex: 1 }); image.close(); decoder.close(); return frames;
       }, animatedGif(256).toString("base64"));
       if (decoded !== 2) throw Error("Animated GIF frames were not retained");
+      await page.locator(`#${kind}-upload`).setInputFiles({ name: "too-large.gif", mimeType: "image/gif", buffer: animatedGif(size * 1024 * 1024 + 1) });
+      await expect(page.locator("#profile-upload-status")).toHaveText(`${kind === "avatar" ? "Avatar" : "Banner"} must be ${size} MB or smaller.`);
+      await expect(page.locator(`#profile-edit-${kind} img`)).toBeVisible();
     }
     console.log("Large profile media passed: 10 MB avatar and 20 MB banner GIFs upload, render, and retain two animation frames.");
   }
