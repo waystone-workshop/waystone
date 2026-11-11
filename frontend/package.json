@@ -1,6 +1,6 @@
 {
   "name": "waystone-desktop",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "repository": {
     "type": "git",
@@ -53,9 +53,11 @@
       "canvas-store.cjs",
       "src/canvas-model.cjs",
       "src/board-model.cjs",
-      "board-files.cjs"
+      "board-files.cjs",
+      "build/icon.png"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": "nsis",
       "artifactName": "Waystone-Setup.${ext}"
     },
@@ -64,6 +66,7 @@
       "allowToChangeInstallationDirectory": true
     },
     "mac": {
+      "icon": "build/icon.png",
       "target": [
         "dmg",
         "zip"
