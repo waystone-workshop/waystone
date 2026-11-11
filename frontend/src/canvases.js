@@ -385,7 +385,7 @@ export function setupCanvases({
     renderLibrary();
     $("canvas-library").showModal();
   });
-  $("local-canvases").onclick = $("workspace-canvases").onclick = showLibrary;
+  $("workspace-canvases").onclick = showLibrary;
   $("new-canvas-drawing").onclick = $("draw").onclick = () => openDrawing();
   $("new-canvas-image").onclick = () => $("canvas-image-file").click();
   $("canvas-image-file").onchange = run(async () => {
