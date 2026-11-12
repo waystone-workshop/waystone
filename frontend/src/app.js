@@ -10,6 +10,7 @@ import { createNoiseProcessor } from "./noise-processor.mjs";
 import { setupUpdates } from "./updates.mjs";
 import { setupProfiles } from "./profiles.mjs";
 import { setupSettings } from "./settings.mjs";
+import { createSounds, joinedIds, notifyForMessage } from "./sounds.mjs";
 import { mergeMessages, rangeQuery } from "./context.mjs";
 const $ = (id) => document.getElementById(id);
 mountIcons(document);
@@ -83,6 +84,8 @@ function setPeopleOpen(open) {
 setPeopleOpen(peoplePreference);
 $("members-toggle").onclick = () => setPeopleOpen($("people-panel").hidden);
 $("members-collapse").onclick = () => setPeopleOpen(false);
+const sounds = createSounds();
+let onlineIds = null;
 const settings = setupSettings({
   document, bridge: window.waystone, report, openProfile: () => $("profile-open").click(),
   user: () => currentUser, avatar: (person) => profiles.avatar(person),
@@ -297,7 +300,15 @@ async function beginSession(user) {
   await loadChannels();
   directory = socket.channel("directory", {});
   const presence = new Presence(directory);
-  presence.onSync(() => { profiles.setPresence(presence.state); pushVoicePresence(); });
+  presence.onSync(() => {
+    const ids = Object.entries(presence.state || {})
+      .filter(([, value]) => (value?.metas || []).length)
+      .map(([id]) => String(id));
+    if (onlineIds && joinedIds(onlineIds, ids).some((id) => id !== String(currentUser?.id))) sounds.login();
+    onlineIds = ids;
+    profiles.setPresence(presence.state);
+    pushVoicePresence();
+  });
   directory.on("profile_updated", () => profiles.refresh().catch(report));
   directory.on("voice_rooms_updated", () => loadVoiceRooms().catch(report));
   directory.on("channel_created", () => loadChannels().catch(report));
@@ -316,6 +327,7 @@ async function beginSession(user) {
   $("gate-status").hidden = true;
   $("join").hidden = true;
   $("workspace").hidden = false;
+  sounds.login();
   notify("");
   loadExpressions().catch((error) => {
     if (!authRejected(error)) report(error);
@@ -515,8 +527,10 @@ async function switchChannel(channel) {
   subscription = socket.channel(`chat:${channelId}`, {});
   subscription.on("message", (message) => {
     if (version !== generation) return;
+    const known = messages.some((item) => item.id === message.id);
     messages = mergeMessages(messages, [message]);
     renderMessages();
+    if (!known && notifyForMessage(message, currentUser?.id)) sounds.message();
   });
   subscription.on("message_updated", (message) => {
     if (version !== generation) return;
@@ -1495,6 +1509,7 @@ async function signOut(revoke = true) {
   token = null;
   await window.waystone.clearSession?.().catch(() => {});
   currentUser = null;
+  onlineIds = null;
   library = { emoji: [], stickers: [] };
   serverPolicy = {
     expression_uploads: "member",

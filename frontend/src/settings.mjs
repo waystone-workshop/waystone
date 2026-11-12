@@ -1,5 +1,6 @@
 import { readAudioPreferences, writeAudioPreferences } from "./audio-quality.mjs";
 import { readVideoPreferences, writeVideoPreferences } from "./video-quality.mjs";
+import { readSoundPreferences, writeSoundPreferences } from "./sounds.mjs";
 
 export function matchingSettings(items, query) {
   const needle = query.trim().toLowerCase();
@@ -20,6 +21,7 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
     if (next === "audio") { loadAudio(); loadVideo(); }
     if (next === "account") renderAccount();
     if (next === "server") onExpressions?.();
+    if (next === "system") loadSounds();
   }
 
   function permitted(link) {
@@ -94,6 +96,12 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
     writeAudioPreferences(patch, storage);
   }
 
+  function loadSounds() {
+    const input = $("sound-notifications");
+    if (!input) return;
+    input.checked = readSoundPreferences(storage).enabled;
+  }
+
   async function loadDesktop() {
     const settings = bridge.desktopSettings
       ? await bridge.desktopSettings()
@@ -126,6 +134,9 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
   $("video-fps")?.addEventListener("change", () => {
     writeVideoPreferences({ frameRate: Number($("video-fps").value) }, storage);
     onVideoChange?.();
+  });
+  $("sound-notifications")?.addEventListener("change", () => {
+    writeSoundPreferences({ enabled: $("sound-notifications").checked }, storage);
   });
   $("close-to-tray").addEventListener("change", () => saveDesktop({ closeToTray: $("close-to-tray").checked }));
   $("open-at-login").addEventListener("change", () => saveDesktop({ openAtLogin: $("open-at-login").checked }));
