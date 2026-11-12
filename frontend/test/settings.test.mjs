@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { matchingSettings, setupSettings } from "../src/settings.mjs";
 import { readAudioPreferences } from "../src/audio-quality.mjs";
 import { readVideoPreferences } from "../src/video-quality.mjs";
+import { readSoundPreferences } from "../src/sounds.mjs";
 
 test("search matches a section label, group, or keyword", () => {
   const items = [
@@ -38,7 +39,7 @@ test("settings pages, search, and switches stay on the choices the listener made
         <select id="video-fps"><option value="15">15</option><option value="30">30</option><option value="60">60</option></select>
       </section>
       <section data-settings-panel="system" hidden>
-        <input id="close-to-tray" type="checkbox" /><input id="open-at-login" type="checkbox" /><p id="startup-note" hidden></p>
+        <input id="sound-notifications" type="checkbox" /><input id="close-to-tray" type="checkbox" /><input id="open-at-login" type="checkbox" /><p id="startup-note" hidden></p>
       </section>
       <span id="settings-avatar"></span><strong id="settings-name"></strong><p id="settings-username"></p><p id="settings-display"></p><p id="settings-role"></p>
       <button data-edit-profile></button>
@@ -81,6 +82,11 @@ test("settings pages, search, and switches stay on the choices the listener made
   assert.equal(document.querySelector('[data-settings-page="system"]').hidden, false);
   assert.equal(document.querySelector('[data-settings-page="audio"]').hidden, true);
   assert.equal(document.querySelector('p[data-settings-group="audio"]').hidden, true);
+  document.querySelector('[data-settings-page="system"]').click();
+  assert.equal(document.getElementById("sound-notifications").checked, true);
+  document.getElementById("sound-notifications").checked = false;
+  document.getElementById("sound-notifications").dispatchEvent(new dom.window.Event("change"));
+  assert.equal(readSoundPreferences(storage).enabled, false);
   document.getElementById("close-to-tray").checked = false;
   document.getElementById("close-to-tray").dispatchEvent(new dom.window.Event("change"));
   await new Promise((resolve) => setImmediate(resolve));

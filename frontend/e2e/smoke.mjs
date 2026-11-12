@@ -30,6 +30,10 @@ try {
   await page.locator("#password").fill("test-password-long");
   await page.locator("#join-form button").click();
   await expect(page.locator("#workspace")).toBeVisible();
+  await page.locator("#settings-open").click();
+  await page.locator('[data-settings-page="system"]').click();
+  await expect(page.locator("#sound-notifications")).toBeChecked();
+  await page.locator('[data-close="settings-dialog"]').click();
   await expect(page.locator("#messages")).toContainText("Let’s plan");
   const sessionRequests = () => requests.filter((url) => url === "/api/session").length;
   const identityRequests = () => requests.filter((url) => url === "/api/me").length;

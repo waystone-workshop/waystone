@@ -33,7 +33,7 @@ A noise-model failure leaves the call on the browser suppressor.
 
 ## People and profiles
 
-Phoenix Presence tracks authenticated directory sockets by immutable user ID.
+A short chime plays when you sign in and when someone else comes online. Another plays when a new message arrives from someone else. History already on screen stays quiet, and your own messages do not chime. The switch is under Settings → System and stays on this device. Phoenix Presence tracks authenticated directory sockets by immutable user ID.
 Multiple windows/devices count as one online person, and closing one device does
 not mark a still-connected user offline. Losing the directory connection displays
 presence as unavailable rather than pretending everyone went offline. Voice-room,

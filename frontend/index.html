@@ -114,7 +114,7 @@
         <p class="settings-group" data-settings-group="server">Server settings</p>
         <button type="button" class="settings-link" data-settings-page="server" data-settings-group="server" data-settings-role="expressions" data-settings-keywords="emoji sticker upload shelf limit room">Expressions</button>
         <p class="settings-group" data-settings-group="system">System</p>
-        <button type="button" class="settings-link" data-settings-page="system" data-settings-group="system" data-settings-keywords="close tray startup windows login updates">System</button>
+        <button type="button" class="settings-link" data-settings-page="system" data-settings-group="system" data-settings-keywords="close tray startup windows login updates sound notification">System</button>
         <button id="leave" type="button" class="danger-text settings-signout">Sign out</button>
       </nav>
       <div class="settings-main">
@@ -167,6 +167,7 @@
           <p class="settings-intro">Waystone can stay available without sitting in the taskbar.</p>
           <div class="settings-row"><div><strong>Close to the tray</strong><p>The close button hides Waystone beside the clock. Voice stays connected. Quit from the tray icon when you want to leave, which is also when a downloaded update installs.</p></div><label class="settings-switch"><input id="close-to-tray" type="checkbox" role="switch" checked /><span class="settings-knob"></span><span class="sr-only">Close to the tray</span></label></div>
           <div class="settings-row"><div><strong>Start with Windows</strong><p>Open Waystone when you sign in to this PC.</p><p id="startup-note" class="settings-note" hidden>The installed app uses this switch. A development window does not register itself at startup.</p></div><label class="settings-switch"><input id="open-at-login" type="checkbox" role="switch" /><span class="settings-knob"></span><span class="sr-only">Start with Windows</span></label></div>
+          <div class="settings-row"><div><strong>Sounds</strong><p>A short chime when you sign in, when someone else comes online, and when a new message arrives from someone else.</p></div><label class="settings-switch"><input id="sound-notifications" type="checkbox" role="switch" checked /><span class="settings-knob"></span><span class="sr-only">Sounds</span></label></div>
           <div class="settings-row"><div><strong>Updates</strong><p>Waystone looks for a new release on its own. Opening the app installs one that is ready.</p></div></div>
         </section>
       </div>
