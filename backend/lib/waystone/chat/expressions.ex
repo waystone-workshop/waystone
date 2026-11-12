@@ -101,6 +101,16 @@ defmodule Waystone.Chat.Expressions do
     end
   end
 
+  def known_emoji(name) do
+    with {:ok, name} <- normalize_name(name),
+         true <- Repo.exists?(from e in Expression, where: e.kind == "emoji" and e.name == ^name) do
+      {:ok, name}
+    else
+      false -> {:error, "Pick an emoji from the room."}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   def public(%Expression{} = expression) do
     %{
       id: expression.id,

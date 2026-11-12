@@ -126,6 +126,19 @@ defmodule WaystoneWeb.ApiController do
     end
   end
 
+  def react(conn, %{"id" => id} = params) do
+    case Chat.toggle_reaction(conn.assigns.current_user, id, params["name"]) do
+      {:ok, payload} ->
+        json(conn, payload)
+
+      {:error, :not_found} ->
+        send_resp(conn, 404, "Not found")
+
+      {:error, reason} when is_binary(reason) ->
+        conn |> put_status(422) |> json(%{error: reason})
+    end
+  end
+
   def server(conn, _params),
     do: json(conn, Waystone.ServerSettings.public(Waystone.ServerSettings.get!()))
 

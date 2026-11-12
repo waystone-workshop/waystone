@@ -220,5 +220,55 @@ defmodule WaystoneWeb.MessagesTest do
     assert missing["error"] == "That sticker is no longer available."
   end
 
+  test "a reaction toggles for the person who added it", %{conn: conn} do
+    {:ok, channel} = Chat.create_channel(%{name: "react-#{System.unique_integer([:positive])}"})
+    author = AccountsFixtures.user()
+    other = AccountsFixtures.user()
+    token = Accounts.create_session(author)
+    {:ok, message} = Chat.send_message(channel.id, author, %{"body" => "hello"})
+
+    conn
+    |> auth(token)
+    |> post("/api/expressions", %{"kind" => "emoji", "name" => "blob", "data" => @png})
+    |> json_response(201)
+
+    assert conn
+           |> auth(token)
+           |> post("/api/messages/#{message.id}/reactions", %{"name" => "nope"})
+           |> json_response(422) == %{"error" => "Pick an emoji from the room."}
+
+    added =
+      conn
+      |> auth(token)
+      |> post("/api/messages/#{message.id}/reactions", %{"name" => "Blob"})
+      |> json_response(200)
+
+    assert added["reactions"] == [%{"name" => "blob", "user_ids" => [author.id]}]
+
+    other_added =
+      conn
+      |> auth(Accounts.create_session(other))
+      |> post("/api/messages/#{message.id}/reactions", %{"name" => "blob"})
+      |> json_response(200)
+
+    assert other_added["reactions"] == [
+             %{"name" => "blob", "user_ids" => [author.id, other.id]}
+           ]
+
+    removed =
+      conn
+      |> auth(token)
+      |> post("/api/messages/#{message.id}/reactions", %{"name" => "blob"})
+      |> json_response(200)
+
+    assert removed["reactions"] == [%{"name" => "blob", "user_ids" => [other.id]}]
+
+    history =
+      conn |> auth(token) |> get("/api/channels/#{channel.id}/messages") |> json_response(200)
+
+    loaded = Enum.find(history["messages"], &(&1["id"] == message.id))
+    assert loaded["reactions"] == removed["reactions"]
+  end
+
   defp auth(conn, token), do: put_req_header(conn, "authorization", "Bearer " <> token)
 end

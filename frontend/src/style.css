@@ -202,6 +202,7 @@ header p {
 #messages {
   flex: 1;
   overflow: auto;
+  overflow-anchor: none;
   padding: 24px 30px;
   scrollbar-color: #42464f transparent;
 }
