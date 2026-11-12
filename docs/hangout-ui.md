@@ -12,14 +12,17 @@ away on the sign-in screen.
 
 Voice rooms are stored separately from text channels. The migration creates
 `campfire`; moderators and admins can create/delete additional voice rooms.
-Members can join any voice room. The compact voice control shows the room,
-participant count, microphone toggle and leave action. Its disclosure contains
-participants, deafen, playback recovery, and room switching.
+The lobby is the voice room, and it stays a place people can hop in and out of.
+It sits above the composer while people are only talking: the room name, who is
+there, and Jump in. Hopping out leaves that lobby up for everyone else. A
+camera or a shared screen docks the lobby beside the conversation. One picture
+is large, the others sit in a strip, and clicking one gives it the large spot.
+On a narrow window that picture stacks above the conversation.
 
 Changing text spaces, opening/closing a board, and deleting a text space do not
-leave voice. Joining a different voice room requires confirmation. Leaving voice,
-signing out, quitting the app, or receiving deletion of the current voice room
-releases the microphone. Hiding the window to the tray keeps the call connected.
+leave the lobby. Joining a different lobby asks first. Hopping out, signing out,
+quitting the app, or deletion of the current voice room releases the microphone.
+Hiding the window to the tray keeps you in the lobby.
 Legacy `/channels/:id/call` remains available for older
 clients; new clients use `/voice-rooms/:id/call`. Old channel calls and new voice
 rooms are separate LiveKit rooms, so friends should update together.

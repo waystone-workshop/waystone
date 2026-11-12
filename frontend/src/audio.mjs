@@ -14,6 +14,7 @@ export class AudioCall {
     this.sharing = false;
     this.playbackBlocked = false;
     this.mounted = new Set();
+    this.spotlightPinned = false;
   }
 
   update() {
@@ -144,23 +145,73 @@ export class AudioCall {
     video.playsInline = true;
     const local = participant === this.room?.localParticipant;
     const sharing = publication?.source === this.screenSource;
-    const host = sharing ? this.videoStage : this.videoCameras;
-    const doc = host.ownerDocument;
-    if (!doc) { host.append(video); this.refreshMedia(); return; }
+    const doc = this.videoStage.ownerDocument;
+    if (!doc?.createElement) {
+      (sharing ? this.videoStage : this.videoCameras).append(video);
+      this.refreshMedia();
+      return;
+    }
     const tile = doc.createElement("div");
     tile.className = local && !sharing ? "call-tile self" : "call-tile";
+    tile.dataset.share = sharing ? "1" : "0";
+    const who = local ? "You" : (participant?.name || "Friend");
+    const label = sharing ? `${who} · sharing` : who;
+    const focus = doc.createElement("button");
+    focus.type = "button";
+    focus.className = "call-focus";
+    focus.setAttribute("aria-label", `Show ${label}`);
     const caption = doc.createElement("span");
-    caption.textContent = `${local ? "You" : (participant?.name || "Friend")}${sharing ? " · sharing" : ""}`;
-    tile.append(video, caption);
+    caption.textContent = label;
+    focus.append(video, caption);
+    focus.onclick = () => this.spotlight(tile);
+    tile.append(focus);
     if (local && sharing) {
       const stop = doc.createElement("button");
       stop.type = "button";
       stop.textContent = "Stop sharing";
-      stop.onclick = () => this.share(false);
+      stop.onclick = (event) => { event.stopPropagation(); this.share(false); };
       tile.append(stop);
     }
-    host.append(tile);
+    this.placeTile(tile, sharing);
     this.refreshMedia();
+  }
+
+  placeTile(tile, sharing) {
+    const current = this.videoStage.firstElementChild;
+    const currentIsShare = current?.dataset.share === "1";
+    const takeStage = !current || (!this.spotlightPinned && sharing && !currentIsShare);
+    if (takeStage && current) this.videoCameras.append(current);
+    (takeStage ? this.videoStage : this.videoCameras).append(tile);
+    this.markSpotlight();
+  }
+
+  spotlight(tile) {
+    if (!tile?.dataset) return;
+    const current = this.videoStage.firstElementChild;
+    if (tile !== current) {
+      if (current) this.videoCameras.append(current);
+      this.videoStage.append(tile);
+    }
+    this.spotlightPinned = true;
+    this.markSpotlight();
+  }
+
+  markSpotlight() {
+    const spot = this.videoStage?.firstElementChild;
+    for (const tile of [...(this.videoStage?.children || []), ...(this.videoCameras?.children || [])]) {
+      const on = tile === spot;
+      tile.classList?.toggle("is-spotlight", on);
+      tile.querySelector?.(".call-focus")?.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+  }
+
+  promoteSpotlight() {
+    if (this.videoStage?.firstElementChild) return;
+    this.spotlightPinned = false;
+    const waiting = [...(this.videoCameras?.children || [])];
+    const next = waiting.find((tile) => tile.dataset?.share === "1") || waiting[0];
+    if (next) this.videoStage.append(next);
+    this.markSpotlight();
   }
 
   unmount(track) {
@@ -180,7 +231,10 @@ export class AudioCall {
     node.pause?.();
     node.srcObject = null;
     const tile = node.closest?.(".call-tile");
-    (tile || node).remove?.();
+    const removed = tile || node;
+    const wasSpotlight = removed?.parentElement === this.videoStage;
+    removed.remove?.();
+    if (wasSpotlight) this.promoteSpotlight();
   }
 
   clearStage() {
@@ -189,6 +243,7 @@ export class AudioCall {
       for (const node of root.querySelectorAll("video, audio")) this.releaseElement(node);
     }
     this.mounted.clear();
+    this.spotlightPinned = false;
     this.audioHost?.replaceChildren?.();
     this.videoStage?.replaceChildren?.();
     this.videoCameras?.replaceChildren?.();

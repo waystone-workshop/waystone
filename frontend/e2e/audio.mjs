@@ -39,8 +39,9 @@ try {
     await page.locator("#join-form button").click();
     await expect(page.locator("#join-audio")).toBeEnabled();
     await page.locator("#join-audio").click();
-    await page.locator("#voice-rooms .voice-room-choice").first().click();
-    await expect(page.locator("#call-state")).toHaveText("Audio connected", { timeout: 30000 });
+    if (await page.locator("#voice-dialog").isVisible())
+      await page.locator("#voice-rooms .voice-room-choice").first().click();
+    await expect(page.locator("#call-state")).toHaveText("You're in", { timeout: 30000 });
   }
   const pages = await Promise.all(clients.map((app) => app.firstWindow()));
   for (const page of pages) {

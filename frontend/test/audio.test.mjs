@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { JSDOM } from "jsdom";
 import { AudioCall } from "../src/audio.mjs";
 import { microphoneConstraints, voiceCapture, voiceCaptureFor, voicePublish } from "../src/audio-quality.mjs";
 import { videoCaptureFor, writeVideoPreferences } from "../src/video-quality.mjs";
@@ -157,6 +158,41 @@ function microphone(track) {
   f.room.localParticipant.getTrackPublication = (source) => source === "microphone" ? { track } : undefined;
   return f;
 }
+
+test("clicking a picture gives it the spotlight and a share starts there", async () => {
+  const dom = new JSDOM(`<section id="call-media"><div id="call-stage"></div><div id="call-cameras"></div></section>`);
+  const document = dom.window.document;
+  const f = fixture();
+  f.call.mediaRoot = document.getElementById("call-media");
+  f.call.videoStage = document.getElementById("call-stage");
+  f.call.videoCameras = document.getElementById("call-cameras");
+  f.call.screenSource = "screen_share";
+  const track = () => {
+    let video;
+    return {
+      kind: "video",
+      attach() { video = document.createElement("video"); return video; },
+      detach() { return video ? [video] : []; },
+      stop() {},
+      mediaStreamTrack: { stop() {} },
+    };
+  };
+  await f.call.join(1);
+  const camera = track();
+  const share = track();
+  f.room.emit("TrackSubscribed", camera, { source: "camera" }, { name: "Mina" });
+  f.room.emit("TrackSubscribed", share, { source: "screen_share" }, { name: "Mina" });
+  assert.equal(document.querySelector("#call-stage span").textContent, "Mina · sharing");
+  assert.equal(document.querySelector("#call-cameras span").textContent, "Mina");
+  document.querySelector("#call-stage .call-focus").click();
+  const later = track();
+  f.room.emit("TrackSubscribed", later, { source: "screen_share" }, { name: "Jules" });
+  assert.equal(document.querySelector("#call-stage span").textContent, "Mina · sharing");
+  document.querySelector("#call-cameras .call-focus").click();
+  assert.equal(document.querySelector("#call-stage span").textContent, "Mina");
+  f.call.unmount(camera);
+  assert.match(document.querySelector("#call-stage span").textContent, /sharing/);
+});
 
 test("camera and screen share publish at the saved picture settings and a share is shown", async () => {
   const storage = new Map();

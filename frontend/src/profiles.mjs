@@ -114,6 +114,14 @@ export function setupProfiles({ document, api, changed, signedOut, report }) {
     people = result.users; renderPeople();
   }
   function setPresence(state, known = true) { presence = state; onlineKnown = known; renderPeople(); }
+  function gathering() {
+    if (!onlineKnown) return [];
+    return people.flatMap((person) => {
+      const meta = voiceMeta(person.id);
+      if (!meta) return [];
+      return [{ id: person.id, name: person.display_name, roomId: Number(meta.voice_room_id), muted: Boolean(meta.muted), speaking: Boolean(meta.speaking) }];
+    });
+  }
   function setRooms(value) { rooms = value; renderPeople(); }
   function clear() {
     epoch++; profileRequest++; people = []; presence = {}; onlineKnown = false; shown = null; closePopover();
@@ -189,5 +197,5 @@ export function setupProfiles({ document, api, changed, signedOut, report }) {
     try { await api("/me/password", { method: "PUT", body: { current_password: $("current-password").value, password: $("new-password").value } }); $("password-form").reset(); $("profile-dialog").close(); signedOut(); }
     catch (error) { report(error); } finally { button.disabled = false; }
   };
-  return { show, avatar, refresh, setPresence, setRooms, clear, get: (id) => people.find((person) => person.id === id) };
+  return { show, avatar, refresh, setPresence, setRooms, clear, gathering, get: (id) => people.find((person) => person.id === id) };
 }
