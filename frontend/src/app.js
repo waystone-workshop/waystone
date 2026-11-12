@@ -142,11 +142,9 @@ const call = new AudioCall({
     voiceState = { state, muted, deafened, participants, playbackBlocked, camera, sharing };
     const idle = state === "idle";
     if (idle) $("call-media").hidden = true;
-    $("join-audio").hidden = !idle;
-    $("join-audio").disabled = false;
     $("call-panel").hidden = idle;
-    $("call-state").textContent = state === "joining" ? "Connecting audio…"
-      : state === "reconnecting" ? "Reconnecting audio…" : "Audio connected";
+    $("call-state").textContent = state === "joining" ? "Hopping in…"
+      : state === "reconnecting" ? "Finding the room again…" : "You're in";
     $("call-channel").textContent = activeVoiceRoom?.name.replaceAll("-", " ") || "Voice";
     $("call-count").textContent = participants.length ? `· ${participants.length}` : "";
     $("call-mute").innerHTML = icon(muted ? "muted" : "mic");
@@ -174,6 +172,7 @@ const call = new AudioCall({
       return item;
     }));
     pushVoicePresence();
+    renderLobby();
   },
 });
 async function loadVoiceRooms() {
@@ -186,12 +185,8 @@ async function loadVoiceRooms() {
     const row = el("div", undefined, "voice-room-row");
     const join = el("button", undefined, "voice-room-choice");
     const mark = el("span"); mark.innerHTML = icon("headphones");
-    join.append(mark, el("strong", room.name.replaceAll("-", " ")), el("small", activeVoiceRoom?.id === room.id && voiceState.state !== "idle" ? "Connected" : "Join voice"));
-    join.onclick = async () => {
-      if (activeVoiceRoom?.id === room.id && voiceState.state !== "idle") { $("voice-dialog").close(); return; }
-      if (voiceState.state !== "idle" && !confirm(`Leave ${activeVoiceRoom?.name} and join ${room.name}?`)) return;
-      call.leave(); activeVoiceRoom = room; $("voice-dialog").close(); await call.join(room.id);
-    }; row.append(join);
+    join.append(mark, el("strong", room.name.replaceAll("-", " ")), el("small", activeVoiceRoom?.id === room.id && voiceState.state !== "idle" ? "You're in" : "Jump in"));
+    join.onclick = () => { enterRoom(room).catch(report); }; row.append(join);
     if (["admin", "moderator"].includes(currentUser?.role)) {
       const remove = el("button", "Delete", "voice-room-delete");
       remove.setAttribute("aria-label", `Delete voice room ${room.name}`);
@@ -201,9 +196,83 @@ async function loadVoiceRooms() {
     return row;
   }));
   if (!voiceRooms.length) $("voice-rooms").append(el("p", "No voice rooms yet. A moderator can create one.", "subtle"));
+  renderLobby();
+}
+function roomLabel(room) { return room?.name?.replaceAll("-", " ") || "the lobby"; }
+function lobbyCrowd(roomId) {
+  const present = profiles.gathering().filter((person) => person.roomId === roomId);
+  const seen = new Set(present.map((person) => person.id));
+  const live = voiceState.state !== "idle" && activeVoiceRoom?.id === roomId ? voiceState.participants : [];
+  for (const person of live) {
+    const known = present.find((item) => item.id === person.user_id);
+    if (known) { known.speaking = person.speaking; known.muted = person.muted; continue; }
+    if (!person.user_id || seen.has(person.user_id)) continue;
+    present.push({ id: person.user_id, name: person.name, roomId, muted: person.muted, speaking: person.speaking });
+  }
+  return present;
+}
+function renderLobby() {
+  const groups = new Map();
+  for (const person of profiles.gathering()) {
+    const list = groups.get(person.roomId) || [];
+    list.push(person);
+    groups.set(person.roomId, list);
+  }
+  let room = voiceState.state !== "idle" ? activeVoiceRoom : null;
+  if (!room) {
+    let fullest = null;
+    for (const [id, list] of groups) if (!fullest || list.length > fullest.list.length) fullest = { id, list };
+    room = fullest ? voiceRooms.find((item) => item.id === fullest.id) || { id: fullest.id, name: "lobby" } : null;
+  }
+  const lobby = $("lobby");
+  lobby.hidden = !room;
+  if (room) lobby.dataset.roomId = String(room.id);
+  else delete lobby.dataset.roomId;
+  const join = $("join-audio");
+  const panel = $("call-panel");
+  const chat = $("composer")?.parentElement;
+  if (lobby.hidden) {
+    if (chat && join.parentElement !== chat) chat.insertBefore(join, $("composer"));
+    if (chat && panel.parentElement !== chat) chat.insertBefore(panel, $("composer"));
+  } else if ($("lobby-actions")) {
+    if (join.parentElement !== $("lobby-actions")) $("lobby-actions").append(join);
+    if (panel.parentElement !== $("lobby-actions")) $("lobby-actions").append(panel);
+  }
+  join.hidden = voiceState.state !== "idle";
+  join.disabled = false;
+  if (!room) return;
+  $("lobby-name").textContent = roomLabel(room);
+  const crowd = lobbyCrowd(room.id);
+  $("lobby-count").textContent = crowd.length === 1 && crowd[0].id === currentUser?.id ? "Just you" : `${crowd.length} here`;
+  $("lobby-people").replaceChildren(...crowd.map((person) => {
+    const item = el("li");
+    const button = el("button", `${person.name}${person.id === currentUser?.id ? " · you" : ""}${person.muted ? " · muted" : ""}`);
+    button.type = "button";
+    button.className = "lobby-person";
+    button.classList.toggle("speaking", Boolean(person.speaking));
+    button.onclick = () => profiles.show(person.id, button);
+    item.append(button);
+    return item;
+  }));
+}
+async function enterRoom(room) {
+  if (activeVoiceRoom?.id === room.id && voiceState.state !== "idle") { $("voice-dialog").close(); return; }
+  if (voiceState.state !== "idle" && !confirm(`Hop out of ${roomLabel(activeVoiceRoom)} and into ${roomLabel(room)}?`)) return;
+  call.leave(); activeVoiceRoom = room; $("voice-dialog").close(); await call.join(room.id);
+}
+async function jumpIn() {
+  try {
+    if (!voiceRooms.length) await loadVoiceRooms();
+    const shown = Number($("lobby").dataset.roomId);
+    const target = voiceRooms.find((room) => room.id === shown);
+    if (voiceState.state === "idle" && target) { await enterRoom(target); return; }
+    if (voiceState.state === "idle" && voiceRooms.length === 1) { await enterRoom(voiceRooms[0]); return; }
+    await showVoiceRooms();
+  } catch (error) { report(error); }
 }
 async function showVoiceRooms() { try { await loadVoiceRooms(); $("voice-dialog").showModal(); } catch (error) { report(error); } }
-$("join-audio").onclick = showVoiceRooms;
+$("join-audio").onclick = () => { jumpIn(); };
+$("lobby-spots").onclick = () => showVoiceRooms();
 $("voice-switch").onclick = () => { $("call-details").open = false; showVoiceRooms(); };
 $("add-voice-room").onclick = () => { $("voice-dialog").close(); $("voice-create-dialog").showModal(); };
 $("voice-create-form").onsubmit = async (event) => {
@@ -307,9 +376,10 @@ async function beginSession(user) {
     if (onlineIds && joinedIds(onlineIds, ids).some((id) => id !== String(currentUser?.id))) sounds.login();
     onlineIds = ids;
     profiles.setPresence(presence.state);
+    renderLobby();
     pushVoicePresence();
   });
-  directory.on("profile_updated", () => profiles.refresh().catch(report));
+  directory.on("profile_updated", () => profiles.refresh().then(renderLobby).catch(report));
   directory.on("voice_rooms_updated", () => loadVoiceRooms().catch(report));
   directory.on("channel_created", () => loadChannels().catch(report));
   directory.on("channel_deleted", () => loadChannels().catch(report));
@@ -318,8 +388,9 @@ async function beginSession(user) {
       notify("The channel board was updated. Open it again to load the latest saved version.");
   });
   directory.on("server_updated", (policy) => applyServerPolicy(policy));
-  directory.join().receive("ok", () => { lastVoiceState = null; loadChannels().catch(report); profiles.refresh().catch(report); });
+  directory.join().receive("ok", () => { lastVoiceState = null; loadChannels().catch(report); profiles.refresh().then(renderLobby).catch(report); });
   await profiles.refresh();
+  renderLobby();
   await loadVoiceRooms();
   await loadServerSettings().catch((error) => {
     if (!authRejected(error)) report(error);
