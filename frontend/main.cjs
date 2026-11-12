@@ -11,6 +11,7 @@ const { pipeline } = require("node:stream/promises");
 const { pathToFileURL } = require("node:url");
 const { validateServer, validatePath } = require("./policy.cjs");
 const { allowMicrophone } = require("./media-policy.cjs");
+const { displayMediaStream } = require("./display-media.cjs");
 const { validateBundle, boardContext } = require("./board-files.cjs");
 const { CanvasStore } = require("./canvas-store.cjs");
 const { validateCanvas } = require("./src/canvas-model.cjs");
@@ -54,16 +55,10 @@ app.whenReady().then(async () => {
     },
   });
   if (process.platform !== "darwin") window.removeMenu();
-  window.webContents.session.setDisplayMediaRequestHandler(async (_request, callback) => {
-    const id = chosenCapture;
+  window.webContents.session.setDisplayMediaRequestHandler((_request, callback) => {
+    const stream = displayMediaStream(chosenCapture);
     chosenCapture = null;
-    try {
-      const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
-      const source = sources.find((item) => item.id === id);
-      callback(source ? { video: source } : {});
-    } catch {
-      callback({});
-    }
+    if (stream) callback(stream);
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
@@ -172,11 +167,16 @@ app.whenReady().then(async () => {
       .filter((source) => /^(screen|window):\d+:\d+$/.test(source.id))
       .sort((a, b) => Number(b.kind === "screen") - Number(a.kind === "screen") || a.name.localeCompare(b.name));
   });
-  ipcMain.handle("capture-choose", (event, id) => {
-    trusted(event);
-    if (typeof id !== "string" || !/^(screen|window):\d+:\d+$/.test(id)) throw new Error("Choose a window or screen.");
-    chosenCapture = id;
-    return true;
+  ipcMain.on("capture-choose", (event, source) => {
+    try {
+      trusted(event);
+      const stream = displayMediaStream(source);
+      if (!stream) throw new Error("Choose a window or screen.");
+      chosenCapture = stream.video;
+      event.returnValue = true;
+    } catch (error) {
+      event.returnValue = { error: error.message || "Choose a window or screen." };
+    }
   });
   ipcMain.handle("share-file", async (event, { server, token, channelId }) => {
     trusted(event);

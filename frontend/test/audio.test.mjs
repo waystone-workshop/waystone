@@ -5,6 +5,7 @@ import { AudioCall } from "../src/audio.mjs";
 import { microphoneConstraints, voiceCapture, voiceCaptureFor, voicePublish } from "../src/audio-quality.mjs";
 import { videoCaptureFor, writeVideoPreferences } from "../src/video-quality.mjs";
 import { allowMicrophone } from "../media-policy.cjs";
+import { displayMediaStream } from "../display-media.cjs";
 
 function fixture(credentials = async () => ({ url: "ws://127.0.0.1:7880", token: "token" })) {
   const room = new EventEmitter();
@@ -97,6 +98,13 @@ test("canceling while audio playback starts never opens the microphone", async (
   assert.equal(f.snapshot.state, "idle");
 });
 
+test("a screen share grant is the chosen id and name", () => {
+  assert.deepEqual(displayMediaStream({ id: "screen:1:0", name: "Desk" }), { video: { id: "screen:1:0", name: "Desk" } });
+  assert.equal(displayMediaStream("window:42:0").video.name, "Window");
+  assert.equal(displayMediaStream("screen:../:0"), null);
+  assert.equal(displayMediaStream(null), null);
+});
+
 test("permission policy grants call media only in the bundled desktop document", () => {
   const entry = "file:///waystone/index.html";
   const contents = { getURL: () => entry }, window = { webContents: contents };
@@ -104,6 +112,7 @@ test("permission policy grants call media only in the bundled desktop document",
     allowMicrophone(contents, window, entry, permission, details, request);
   assert.equal(check("media", { requestingUrl: entry, mediaTypes: ["audio"] }), true);
   assert.equal(check("media", { requestingUrl: entry, mediaTypes: ["video"] }), true);
+  assert.equal(check("media", { requestingUrl: entry, mediaTypes: [] }), true);
   assert.equal(check("media", { requestingUrl: entry, mediaTypes: ["audio", "video"] }), false);
   assert.equal(check("display-capture", {}), true);
   assert.equal(check("media", { requestingUrl: "https://remote.test", mediaTypes: ["video"] }), false);
