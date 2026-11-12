@@ -17,6 +17,7 @@ config :waystone,
 config :waystone, WaystoneWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
+  http: [http_options: [request_timeout: 1_800_000]],
   render_errors: [
     formats: [html: WaystoneWeb.ErrorHTML, json: WaystoneWeb.ErrorJSON],
     layout: false

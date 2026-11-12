@@ -5,6 +5,8 @@ import Config
 # The MIX_TEST_PARTITION environment variable can be used
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
+config :waystone, Waystone.Chat.Files, root: Path.expand("../tmp/test-files", __DIR__)
+
 config :waystone, Waystone.Repo,
   database: Path.expand("../waystone_test.db", __DIR__),
   pool_size: 5,

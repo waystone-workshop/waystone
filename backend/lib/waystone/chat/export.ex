@@ -10,13 +10,17 @@ defmodule Waystone.Chat.Export do
         author = m.author |> String.replace(~r/[\r\n]/u, " ")
 
         images =
-          Enum.map_join(m.attachments, "\n", fn a ->
-            reference =
-              if a["canvas_id"],
-                do: "\nCanvas: #{a["canvas_id"]} · snapshot revision #{a["canvas_revision"]}",
-                else: ""
+          Enum.map_join(m.attachments, "\n", fn
+            %{"kind" => "file", "name" => name, "byte_size" => size} ->
+              "#{name} · #{size} bytes. Download it from the channel; it is not included in this export."
 
-            "![#{a["kind"]}](attachments/#{a["name"]})" <> reference
+            a ->
+              reference =
+                if a["canvas_id"],
+                  do: "\nCanvas: #{a["canvas_id"]} · snapshot revision #{a["canvas_revision"]}",
+                  else: ""
+
+              "![#{a["kind"]}](attachments/#{a["name"]})" <> reference
           end)
 
         "## Message #{m.id} · #{author} · #{DateTime.to_iso8601(m.inserted_at)}\n\n#{m.body || ""}\n\n#{images}\n"
@@ -26,8 +30,12 @@ defmodule Waystone.Chat.Export do
   def bundle(channel, messages) do
     files =
       Enum.flat_map(messages, fn m ->
-        Enum.map(m.attachments, fn a ->
-          {String.to_charlist("attachments/" <> a["name"]), Base.decode64!(a["data"])}
+        Enum.flat_map(m.attachments, fn
+          %{"kind" => "file"} ->
+            []
+
+          a ->
+            [{String.to_charlist("attachments/" <> a["name"]), Base.decode64!(a["data"])}]
         end)
       end)
 

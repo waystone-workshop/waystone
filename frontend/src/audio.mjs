@@ -1,15 +1,19 @@
 import { microphoneConstraints, readAudioPreferences } from "./audio-quality.mjs";
+import { readVideoPreferences, videoCaptureFor } from "./video-quality.mjs";
 
 // A call owns its room, microphone, and playback elements until leave().
 export class AudioCall {
-  constructor({ createRoom, events, credentials, changed, failed, audioHost }) {
-    Object.assign(this, { createRoom, events, credentials, changed, failed, audioHost });
+  constructor({ createRoom, events, credentials, changed, failed, audioHost, mediaRoot, videoStage, videoCameras, prepareShare, cameraSource, screenSource }) {
+    Object.assign(this, { createRoom, events, credentials, changed, failed, audioHost, mediaRoot, videoStage, videoCameras, prepareShare, cameraSource, screenSource });
     this.version = 0;
     this.room = null;
     this.state = "idle";
     this.deafened = false;
     this.muted = false;
+    this.cameraOn = false;
+    this.sharing = false;
     this.playbackBlocked = false;
+    this.mounted = new Set();
   }
 
   update() {
@@ -18,6 +22,7 @@ export class AudioCall {
       : [];
     this.changed({
       state: this.state, muted: this.muted, deafened: this.deafened,
+      camera: this.cameraOn, sharing: this.sharing,
       playbackBlocked: this.playbackBlocked,
       participants: participants.map((p) => ({
         user_id: this.participantUserId(p),
@@ -53,14 +58,24 @@ export class AudioCall {
         "TrackUnmuted", "TrackPublished", "TrackUnpublished", "LocalTrackPublished",
         "LocalTrackUnpublished", "ActiveSpeakersChanged"])
         room.on(this.events[event], () => { if (current()) this.update(); });
-      room.on(this.events.TrackSubscribed, (track) => {
-        if (!current() || track.kind !== "audio") return;
-        const audio = track.attach();
-        audio.muted = this.deafened;
-        this.audioHost.append(audio);
-        this.update();
+      room.on(this.events.TrackSubscribed, (track, publication, participant) => {
+        if (!current()) return;
+        if (track.kind === "audio") {
+          const audio = track.attach();
+          audio.muted = this.deafened;
+          this.audioHost.append(audio);
+          this.update();
+          return;
+        }
+        if (track.kind === "video") this.mountVideo(track, publication, participant);
       });
-      room.on(this.events.TrackUnsubscribed, (track) => track.detach().forEach((node) => node.remove()));
+      room.on(this.events.LocalTrackPublished, (publication, participant) => {
+        if (!current() || publication.track?.kind !== "video") return;
+        this.mountVideo(publication.track, publication, participant);
+      });
+      const unmount = (track) => { if (current() && track) this.unmount(track); };
+      room.on(this.events.TrackUnsubscribed, unmount);
+      room.on(this.events.LocalTrackUnpublished, (publication) => unmount(publication?.track));
       room.on(this.events.AudioPlaybackStatusChanged, () => {
         if (!current()) return;
         this.playbackBlocked = !room.canPlaybackAudio;
@@ -116,6 +131,101 @@ export class AudioCall {
     }
   }
 
+  capture() {
+    return videoCaptureFor(readVideoPreferences());
+  }
+
+  mountVideo(track, publication, participant) {
+    if (!this.videoStage || !this.videoCameras || this.mounted.has(track)) return;
+    this.mounted.add(track);
+    const video = track.attach();
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    const local = participant === this.room?.localParticipant;
+    const sharing = publication?.source === this.screenSource;
+    const host = sharing ? this.videoStage : this.videoCameras;
+    const doc = host.ownerDocument;
+    if (!doc) { host.append(video); this.refreshMedia(); return; }
+    const tile = doc.createElement("div");
+    tile.className = local && !sharing ? "call-tile self" : "call-tile";
+    const caption = doc.createElement("span");
+    caption.textContent = `${local ? "You" : (participant?.name || "Friend")}${sharing ? " · sharing" : ""}`;
+    tile.append(video, caption);
+    if (local && sharing) {
+      const stop = doc.createElement("button");
+      stop.type = "button";
+      stop.textContent = "Stop sharing";
+      stop.onclick = () => this.share(false);
+      tile.append(stop);
+    }
+    host.append(tile);
+    this.refreshMedia();
+  }
+
+  unmount(track) {
+    this.mounted.delete(track);
+    for (const node of track.detach?.() || []) {
+      const tile = node.closest?.(".call-tile");
+      (tile || node).remove();
+    }
+    this.refreshMedia();
+  }
+
+  refreshMedia() {
+    if (!this.mediaRoot) return;
+    const tiles = (this.videoStage?.childElementCount || 0) + (this.videoCameras?.childElementCount || 0);
+    this.mediaRoot.hidden = tiles === 0;
+  }
+
+  async camera(enabled) {
+    const room = this.room;
+    if (!room || this.state !== "connected" || this.changingCamera) return;
+    this.changingCamera = true;
+    try {
+      const capture = this.capture();
+      await room.localParticipant.setCameraEnabled(enabled, { resolution: capture.resolution }, { videoEncoding: capture.encoding });
+      if (room !== this.room) return;
+      this.cameraOn = enabled;
+      this.update();
+    } catch (error) { this.failed(error); }
+    finally { this.changingCamera = false; }
+  }
+
+  async share(enabled) {
+    const room = this.room;
+    if (!room || this.state !== "connected" || this.changingShare) return;
+    this.changingShare = true;
+    try {
+      const capture = this.capture();
+      await room.localParticipant.setScreenShareEnabled(enabled, {
+        audio: false, contentHint: "detail", resolution: capture.resolution,
+      }, { screenShareEncoding: capture.encoding });
+      if (room !== this.room) return;
+      this.sharing = enabled;
+      this.update();
+    } catch (error) { this.failed(error); }
+    finally { this.changingShare = false; }
+  }
+
+  async applyVideo() {
+    const room = this.room;
+    if (!room || this.state !== "connected") return;
+    if (this.cameraOn) {
+      const publication = room.localParticipant.getTrackPublication?.(this.cameraSource);
+      if (publication?.track) await room.localParticipant.unpublishTrack?.(publication.track, true);
+      if (room !== this.room) return;
+      this.cameraOn = false;
+      await this.camera(true);
+    }
+    if (room !== this.room || !this.sharing || !this.prepareShare) return;
+    await this.share(false);
+    if (room !== this.room) return;
+    await this.prepareShare();
+    if (room !== this.room) return;
+    await this.share(true);
+  }
+
   async mute() {
     const room = this.room;
     if (!room || this.state !== "connected" || this.changingMic) return;
@@ -148,8 +258,14 @@ export class AudioCall {
     this.state = "idle";
     this.muted = false;
     this.deafened = false;
+    this.cameraOn = false;
+    this.sharing = false;
     this.playbackBlocked = false;
+    this.mounted.clear();
     this.audioHost.replaceChildren();
+    this.videoStage?.replaceChildren?.();
+    this.videoCameras?.replaceChildren?.();
+    this.refreshMedia();
     // disconnect(true) stops all local microphone tracks as well as transports.
     if (room) Promise.resolve(room.disconnect(true)).catch(() => {});
     this.update();

@@ -45,6 +45,8 @@ defmodule WaystoneWeb.Router do
     put "/channels/:id/board", ApiController, :save_channel_board
     get "/channels/:id/messages", ApiController, :messages
     post "/channels/:id/messages", ApiController, :send_message
+    post "/channels/:id/files", ApiController, :upload_file
+    delete "/channels/:id/files/:file_id", ApiController, :discard_file
     get "/channels/:id/export", ApiController, :export
     get "/messages/:message_id/attachments/:attachment_id", ApiController, :attachment
   end

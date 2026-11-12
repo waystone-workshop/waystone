@@ -1,8 +1,8 @@
 # Audio service
 
-LiveKit forwards WebRTC audio between members of a channel. Phoenix issues
-five-minute room tokens; only microphone publishing is permitted. Each channel
-has its own room. No media is recorded or stored by Waystone.
+LiveKit forwards WebRTC between people in a voice room. Phoenix issues
+five-minute room tokens that can publish a microphone, a camera, and a screen
+share. No media is recorded or stored by Waystone.
 
 For local Windows development (x64), run `./start.ps1` from this folder. It downloads
 LiveKit 1.13.11 from its official release and verifies its SHA-256 checksum.
@@ -21,5 +21,5 @@ on Phoenix. Never ship the API secret to Electron. Consult
 https://docs.livekit.io/transport/self-hosting/deployment/ for deployment details.
 
 This uses LiveKit's normal WebRTC transport encryption, not Discord's DAVE
-end-to-end encryption. The SFU is trusted. Camera and screen-share publishing
-are disallowed by the room token as well as the desktop permission policy.
+end-to-end encryption. The SFU is trusted. The desktop allows the camera and
+display capture only from the Waystone window, after someone turns them on.

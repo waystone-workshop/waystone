@@ -18,6 +18,7 @@ try {
   });
   let page = await application.firstWindow();
   await page.waitForLoadState("load");
+  expect(await application.evaluate(({ Menu }) => Menu.getApplicationMenu())).toBeNull();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await expect(page.locator("#name")).toBeVisible();

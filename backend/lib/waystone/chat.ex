@@ -89,6 +89,7 @@ defmodule Waystone.Chat do
   def delete_channel(channel_id) do
     channel = get_channel!(channel_id)
     board = get_board!(channel.id)
+    files = Waystone.Chat.Files.paths(channel.id)
 
     result =
       Repo.transaction(fn ->
@@ -98,6 +99,7 @@ defmodule Waystone.Chat do
 
     case result do
       {:ok, _} ->
+        Waystone.Chat.Files.remove(files)
         payload = %{id: channel.id, board_id: board.id}
         WaystoneWeb.Endpoint.broadcast("directory", "channel_deleted", payload)
         WaystoneWeb.Endpoint.broadcast(topic(channel.id), "channel_deleted", payload)
@@ -155,17 +157,31 @@ defmodule Waystone.Chat do
         name when is_binary(name) -> {name, nil}
       end
 
-    with {:ok, attachments} <- Waystone.Chat.Attachments.validate(attrs["attachments"] || []) do
-      %Message{channel_id: channel_id, attachments: attachments, user_id: user_id}
-      |> Message.changeset(%{author: name, body: attrs["body"] || ""})
-      |> Repo.insert()
-      |> case do
+    with {:ok, attachments} <-
+           Waystone.Chat.Attachments.validate(attrs["attachments"] || [], author, channel_id) do
+      changeset =
+        %Message{channel_id: channel_id, attachments: attachments, user_id: user_id}
+        |> Message.changeset(%{author: name, body: attrs["body"] || ""})
+
+      result =
+        Repo.transaction(fn ->
+          case Repo.insert(changeset) do
+            {:ok, message} ->
+              Waystone.Chat.Files.bind(message, attachments, author)
+              message
+
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
+        end)
+
+      case result do
         {:ok, message} ->
           WaystoneWeb.Endpoint.broadcast(topic(channel_id), "message", message_json(message))
           {:ok, message}
 
-        error ->
-          error
+        {:error, reason} ->
+          {:error, reason}
       end
     end
   end

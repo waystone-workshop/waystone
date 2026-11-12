@@ -76,6 +76,11 @@ button svg, summary svg, [data-icon] svg { display: block; width: 20px; height: 
 .message-content > img { border-radius: 9px; margin-top: 12px; }
 #composer { margin: 6px 28px 18px; padding: 8px 10px 5px; border-radius: 10px; background: #27241f; border-color: #4a4236; }
 .composer-row { display: flex; align-items: center; gap: 6px; }
+.shared-file, .pending-file { display: inline-flex; align-items: center; gap: 8px; max-width: min(440px, 100%); margin-top: 8px; padding: 8px 12px; text-align: left; }
+.shared-file span:first-child, .pending-file span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-size { color: var(--muted); flex: none; font-size: 12px; }
+.pending-file { position: relative; margin-top: 0; padding-right: 28px; }
+.pending-file button { position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; padding: 0; border: 0; background: transparent; }
 #body { min-height: 40px; max-height: 130px; padding: 10px; line-height: 1.5; font-size: 14px; resize: vertical; }
 #body:focus { outline: none; }
 #composer:focus-within { border-color: #a77d48; }
@@ -85,6 +90,22 @@ button svg, summary svg, [data-icon] svg { display: block; width: 20px; height: 
 .voice-entry { align-self: flex-end; margin: 6px 28px 4px; display: flex; gap: 10px; align-items: center; border-color: var(--ww-border); border-radius: 24px; background: var(--ww-surface); font-size: 12px; padding: 9px 16px; }
 .voice-entry > span { color: #a2b788; }
 .voice-capsule { position: relative; z-index: 15; display: flex; align-items: center; align-self: flex-end; gap: 2px; max-width: calc(100% - 56px); padding: 3px 6px; margin: 6px 28px 4px; border: 1px solid #4b4538; border-radius: 28px; background: #2b2822; }
+#call-camera[aria-pressed="true"], #call-share[aria-pressed="true"] { color: var(--accent); }
+#call-media { display: grid; gap: 8px; margin: 8px 28px 0; }
+#call-cameras { display: flex; gap: 8px; overflow-x: auto; }
+#call-stage { display: grid; gap: 8px; }
+#call-stage:empty, #call-cameras:empty { display: none; }
+.call-tile { position: relative; min-width: 0; }
+.call-tile video { width: 100%; max-height: 52vh; background: #14120f; border-radius: 10px; object-fit: contain; display: block; }
+#call-cameras .call-tile video { width: 168px; height: 94px; object-fit: cover; }
+.call-tile.self video { transform: scaleX(-1); }
+.call-tile span { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; padding: 2px 6px; border-radius: 6px; background: rgb(16 14 12 / 72%); }
+.call-tile button { position: absolute; top: 8px; right: 8px; }
+.share-sources { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; max-height: 50vh; overflow: auto; }
+.share-source { display: grid; gap: 4px; padding: 8px; text-align: left; }
+.share-source img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #14120f; border-radius: 6px; }
+.share-source span, .share-source strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-source span { font-size: 12px; color: var(--muted); font-weight: 400; }
 #call-details > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; padding: 7px 12px; font-size: 12px; }
 #call-channel { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #call-count { color: var(--muted); font-size: 11px; }

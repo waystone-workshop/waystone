@@ -1,18 +1,24 @@
 defmodule Waystone.Chat.Attachments do
   @max_bytes 5 * 1024 * 1024
 
-  def validate(items) when is_list(items) and length(items) <= 4 do
+  def validate(items, user \\ nil, channel_id \\ nil)
+
+  def validate(items, user, channel_id) when is_list(items) and length(items) <= 4 do
     Enum.reduce_while(items, {:ok, []}, fn item, {:ok, acc} ->
-      case validate_one(item) do
+      case validate_one(item, user, channel_id) do
         {:ok, attachment} -> {:cont, {:ok, acc ++ [attachment]}}
         error -> {:halt, error}
       end
     end)
   end
 
-  def validate(_), do: {:error, "Choose at most four images (5 MB each)."}
+  def validate(_, _, _), do: {:error, "Choose at most four attachments."}
 
-  defp validate_one(%{"data" => data} = item)
+  defp validate_one(%{"kind" => "file", "file_id" => id}, user, channel_id) do
+    Waystone.Chat.Files.attachment(user, channel_id, id)
+  end
+
+  defp validate_one(%{"data" => data} = item, _user, _channel_id)
        when is_binary(data) and byte_size(data) <= 7_000_000 do
     with {:ok, _bytes, mime, ext} <- Waystone.Media.decode_image(data, @max_bytes),
          {:ok, reference} <- canvas_reference(item) do
@@ -31,7 +37,7 @@ defmodule Waystone.Chat.Attachments do
     end
   end
 
-  defp validate_one(_), do: {:error, "Invalid image."}
+  defp validate_one(_, _, _), do: {:error, "Invalid attachment."}
 
   defp canvas_reference(%{"canvas_id" => id, "canvas_revision" => revision})
        when is_integer(revision) and revision > 0 do

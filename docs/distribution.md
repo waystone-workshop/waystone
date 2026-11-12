@@ -19,14 +19,16 @@ folder or an admin account. The landing page's registration section is
 informational; accounts are provided by the app/API.
 See [accounts and roles](accounts.md) for first-admin assignment and permissions.
 
-Windows clients check for stable updates at startup and every six hours, download
-in the background, and install silently on normal exit. Waystone then opens again.
-Hiding the window to the tray is not an exit: Quit from the tray icon installs a
-downloaded update. A downloaded update does not stop
-later checks. If a newer release is published before that restart, Waystone
+Windows clients check for stable updates when they open and every six hours.
+There is no Check for updates control. A release found while the app is opening
+downloads and installs, then Waystone opens again. A release found during a
+session downloads in the background and installs the next time the app opens,
+or when it quits. Hiding the window to the tray is not an exit: Quit from the
+tray icon installs a downloaded update. A downloaded update does not stop
+later checks. If a newer release is published before that install, Waystone
 downloads the newer installer and installs only that one. Each release is a full
 installer, so the latest one already contains the earlier updates. They do not
-force a restart during a call. Users can also choose **Restart and install**.
+force a restart during a call. The update notice can still offer **Restart and install**.
 Publish the installer, matching `latest.yml`, and blockmaps together; the updater
 cannot use an EXE alone.
 Unsigned macOS builds offer manual release downloads until Apple signing and

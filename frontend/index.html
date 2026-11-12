@@ -28,7 +28,6 @@
     <section id="join" class="gate">
       <header class="gate-bar">
         <div class="wordmark"><img src="dist/design-system/assets/mark.svg" alt="" width="22" height="22" /> WAYSTONE</div>
-        <button id="check-updates" type="button">Check for updates</button>
       </header>
       <div class="gate-layout">
         <div class="gate-copy">
@@ -81,17 +80,20 @@
         <div class="conversation-date">Your shared space</div>
         <button id="older" hidden>Load earlier messages</button>
         <div id="messages" role="log" aria-label="Messages"></div>
+        <section id="call-media" hidden><div id="call-stage"></div><div id="call-cameras"></div></section>
         <section id="call-panel" class="voice-capsule" aria-label="Active voice party" hidden>
           <details id="call-details"><summary><span class="voice-signal" data-icon="signal"></span><span id="call-channel"></span><span id="call-count"></span><span data-icon="chevron"></span></summary><div class="voice-details"><strong id="call-state" role="status">Connecting audio…</strong><ul id="call-participants" aria-label="Call participants"></ul><button id="call-deafen" aria-pressed="false">Deafen</button><button id="call-resume" hidden>Enable audio playback</button><button id="voice-switch">Switch voice room</button></div></details>
-          <button id="call-mute" class="icon-button" aria-label="Mute microphone" title="Mute microphone" aria-pressed="false" data-icon="mic"></button><button id="call-leave" class="icon-button danger-text" aria-label="Leave voice" title="Leave voice" data-icon="hangup"></button><div id="call-audio"></div>
+          <button id="call-mute" class="icon-button" aria-label="Mute microphone" title="Mute microphone" aria-pressed="false" data-icon="mic"></button><button id="call-camera" class="icon-button" aria-label="Turn camera on" title="Turn camera on" aria-pressed="false" data-icon="video"></button><button id="call-share" class="icon-button" aria-label="Share a window or the desk" title="Share a window or the desk" aria-pressed="false" data-icon="screen"></button><button id="call-leave" class="icon-button danger-text" aria-label="Leave voice" title="Leave voice" data-icon="hangup"></button><div id="call-audio"></div>
         </section>
         <button id="join-audio" class="voice-entry" aria-haspopup="dialog"><span data-icon="headphones"></span>Join voice</button>
-        <form id="composer"><div id="pending"></div><div class="composer-row"><button id="picture" class="icon-button" type="button" aria-label="Attach an image" title="Attach an image" data-icon="attach"></button><button id="draw" class="icon-button" type="button" aria-label="Draw" title="Draw" data-icon="pen"></button><label class="sr-only" for="body">Message</label><textarea id="body" maxlength="2000" rows="1" placeholder="Say something to the room…"></textarea><button id="send" class="icon-button send-button" aria-label="Send message" title="Send message" data-icon="send"></button></div><footer><span id="draft-status"></span><span>Enter to send · Shift + Enter for a new line</span></footer></form>
+        <form id="composer"><div id="pending"></div><div class="composer-row"><button id="picture" class="icon-button" type="button" aria-label="Attach an image" title="Attach an image" data-icon="attach"></button><button id="share-file" class="icon-button" type="button" aria-label="Share a file" title="Share a file up to 256 MB" data-icon="file"></button><button id="draw" class="icon-button" type="button" aria-label="Draw" title="Draw" data-icon="pen"></button><label class="sr-only" for="body">Message</label><textarea id="body" maxlength="2000" rows="1" placeholder="Say something to the room…"></textarea><button id="send" class="icon-button send-button" aria-label="Send message" title="Send message" data-icon="send"></button></div><footer><span id="draft-status"></span><span>Enter to send · Shift + Enter for a new line</span></footer></form>
         <input id="files" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
+        <input id="share-file-input" type="file" hidden />
       </section>
       <aside id="people-panel" aria-label="Who’s around"><div class="people-heading"><h2>Who’s around</h2><button id="members-collapse" class="icon-button" aria-label="Collapse people panel" data-icon="collapse"></button></div><div id="presence-status" role="status">Connecting to your people…</div><div id="people-online"></div><details class="offline-group"><summary id="offline-title">Offline</summary><div id="people-offline"></div></details><button id="members-open" class="manage-members">Member directory</button></aside>
     </main>
     <dialog id="space-dialog" class="picker-dialog"><div class="picker-heading"><h2>Find your space</h2><button data-close="space-dialog" class="icon-button" aria-label="Close space picker" data-icon="close"></button></div><label class="sr-only" for="space-search">Search spaces</label><input id="space-search" type="search" placeholder="Search spaces…" autocomplete="off" /><nav id="channels" aria-label="Text spaces"></nav><p id="space-no-results" hidden>No spaces match your search.</p><button id="add-channel">Create a space</button></dialog>
+    <dialog id="share-dialog" class="picker-dialog"><div class="picker-heading"><h2>Share with the room</h2><button data-close="share-dialog" class="icon-button" aria-label="Close sharing" data-icon="close"></button></div><p class="subtle">A window or the whole desk. Picture quality and frame rate follow your voice settings.</p><div id="share-sources" class="share-sources"></div></dialog>
     <dialog id="voice-dialog" class="picker-dialog"><div class="picker-heading"><h2>A place to hang out</h2><button data-close="voice-dialog" class="icon-button" aria-label="Close voice rooms" data-icon="close"></button></div><p class="subtle">Voice stays with you while you move between spaces.</p><div id="voice-rooms"></div><button id="add-voice-room">Create a voice room</button></dialog>
     <dialog id="voice-create-dialog"><form id="voice-create-form"><h2>A new gathering spot</h2><label>Room name<input id="voice-room-name" required maxlength="40" pattern="[a-z0-9][a-z0-9-]{0,39}" placeholder="late-night-party" /></label><div class="actions"><button type="button" data-close="voice-create-dialog">Cancel</button><button class="primary">Create room</button></div></form></dialog>
     <dialog id="settings-dialog" class="settings-shell" aria-label="Settings">
@@ -107,7 +109,7 @@
         <button type="button" class="settings-link active" data-settings-page="account" data-settings-group="user" data-settings-keywords="profile username display name role">Account</button>
         <button type="button" class="settings-link" data-settings-page="security" data-settings-group="user" data-settings-keywords="password sign out devices">Password &amp; security</button>
         <p class="settings-group" data-settings-group="audio">Audio settings</p>
-        <button type="button" class="settings-link" data-settings-page="audio" data-settings-group="audio" data-settings-keywords="voice microphone noise echo gain input">Voice</button>
+        <button type="button" class="settings-link" data-settings-page="audio" data-settings-group="audio" data-settings-keywords="voice microphone noise echo gain input camera video quality fps frame screen share">Voice</button>
         <p class="settings-group" data-settings-group="system">System</p>
         <button type="button" class="settings-link" data-settings-page="system" data-settings-group="system" data-settings-keywords="close tray startup windows login updates">System</button>
         <button id="leave" type="button" class="danger-text settings-signout">Sign out</button>
@@ -132,18 +134,20 @@
         </section>
         <section data-settings-panel="audio" hidden>
           <h2>Voice</h2>
-          <p class="settings-intro">Calls use one noise suppressor, echo cancellation, and 64 kbps speech. These choices apply the next time you join a voice room.</p>
+          <p class="settings-intro">Calls use one noise suppressor, echo cancellation, and 64 kbps speech. Picture quality and frame rate apply to your camera and to anything you share.</p>
           <div class="settings-row"><div><strong>Microphone</strong><p>The input used when you join voice.</p></div><select id="audio-device" aria-label="Microphone"><option value="">Default microphone</option></select></div>
           <div class="settings-row"><div><strong>Noise suppression</strong><p>Automatic uses the system voice isolation when this PC has it, and Waystone’s noise model otherwise.</p></div><select id="audio-noise" aria-label="Noise suppression"><option value="automatic">Automatic</option><option value="off">Off</option></select></div>
           <div class="settings-row"><div><strong>Echo cancellation</strong><p>Keeps the room from hearing itself through your speakers.</p></div><label class="settings-switch"><input id="audio-echo" type="checkbox" role="switch" checked /><span class="settings-knob"></span><span class="sr-only">Echo cancellation</span></label></div>
           <div class="settings-row"><div><strong>Automatic gain</strong><p>Evens out a quiet or loud microphone.</p></div><label class="settings-switch"><input id="audio-gain" type="checkbox" role="switch" checked /><span class="settings-knob"></span><span class="sr-only">Automatic gain</span></label></div>
+          <div class="settings-row"><div><strong>Picture quality</strong><p>720, 1080, or HQ. HQ is 1440. A camera that is already on updates immediately. A share uses this the next time it restarts.</p></div><select id="video-quality" aria-label="Picture quality"><option value="720">720</option><option value="1080" selected>1080</option><option value="hq">HQ</option></select></div>
+          <div class="settings-row"><div><strong>Frame rate</strong><p>How often the picture updates, separate from its size. 30 is the usual choice. 60 is the heavy one.</p></div><select id="video-fps" aria-label="Frame rate"><option value="15">15 fps</option><option value="30" selected>30 fps</option><option value="60">60 fps</option></select></div>
         </section>
         <section data-settings-panel="system" hidden>
           <h2>System</h2>
           <p class="settings-intro">Waystone can stay available without sitting in the taskbar.</p>
           <div class="settings-row"><div><strong>Close to the tray</strong><p>The close button hides Waystone beside the clock. Voice stays connected. Quit from the tray icon when you want to leave, which is also when a downloaded update installs.</p></div><label class="settings-switch"><input id="close-to-tray" type="checkbox" role="switch" checked /><span class="settings-knob"></span><span class="sr-only">Close to the tray</span></label></div>
           <div class="settings-row"><div><strong>Start with Windows</strong><p>Open Waystone when you sign in to this PC.</p><p id="startup-note" class="settings-note" hidden>The installed app uses this switch. A development window does not register itself at startup.</p></div><label class="settings-switch"><input id="open-at-login" type="checkbox" role="switch" /><span class="settings-knob"></span><span class="sr-only">Start with Windows</span></label></div>
-          <div class="settings-row"><div><strong>Updates</strong><p>Waystone checks in the background. A restart installs the newest release and opens the app again.</p></div><button id="workspace-updates" type="button">Check for updates</button></div>
+          <div class="settings-row"><div><strong>Updates</strong><p>Waystone looks for a new release on its own. Opening the app installs one that is ready.</p></div></div>
         </section>
       </div>
     </dialog>

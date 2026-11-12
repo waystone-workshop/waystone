@@ -129,6 +129,10 @@ test("renderer sends text, pictures and drawings, exports a range, and restores 
         !$("workspace").hidden &&
         $("messages").textContent.includes("Let’s plan"),
     );
+    assert.equal($("video-quality").value, "1080");
+    assert.equal($("video-fps").value, "30");
+    assert.equal($("call-camera").getAttribute("data-icon"), "video");
+    assert.equal($("call-share").getAttribute("data-icon"), "screen");
     $("body").value = '<script>alert("text only")</script>';
     submit("composer");
     await poll(() => $("messages").querySelectorAll("article").length === 2);
@@ -254,6 +258,28 @@ test("renderer sends text, pictures and drawings, exports a range, and restores 
     $("open-channel-board").click();
     await poll(() => $("board-dialog").open);
     $("board-close").click();
+    let savedFile = null;
+    w.waystone.shareFile = async () => ({
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "notes.txt",
+      byte_size: 1280,
+    });
+    w.waystone.saveSharedFile = async (payload) => {
+      savedFile = payload;
+      return true;
+    };
+    $("share-file").click();
+    await poll(() => $("pending").textContent.includes("notes.txt"));
+    assert.match($("pending").textContent, /1\.3 KB/);
+    submit("composer");
+    await poll(() => $("messages").querySelector(".shared-file"));
+    assert.equal($("messages").querySelectorAll(".shared-file img").length, 0);
+    $("messages").querySelector(".shared-file").click();
+    await poll(() => savedFile?.name === "notes.txt");
+    assert.match(
+      savedFile.path,
+      /\/api\/messages\/\d+\/attachments\/11111111-1111-4111-8111-111111111111$/,
+    );
     $("delete-channel").click();
     await poll(
       () => $("channel-title").textContent === "Choose or create a channel",

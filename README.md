@@ -16,7 +16,7 @@ The new hangout layout and its supported features are described in
 [the desktop redesign notes](docs/hangout-ui.md).
 
 - Multiple text channels, live messages, and paginated history.
-- Pictures (PNG, JPEG, GIF, WebP): up to four per message, 5 MB each.
+- A message can include four attachments. Pictures (PNG, JPEG, GIF, WebP) are up to 5 MB each. Any other file is up to 256 MB. The file bytes stay on disk beside the database; a message stores the name and size, and a friend saves it to their computer.
 - A local drawing pad with pen color, brush size, clear, and PNG attachment.
 - Per-channel text drafts saved on the device.
 - Automatic socket reconnect and history catch-up.
@@ -26,8 +26,10 @@ The new hangout layout and its supported features are described in
   not just the 100 messages initially visible. Preserve authors, UTC timestamps,
   message IDs, channel name, pictures, and drawings.
 
-Audio calls are available per text channel with join/leave, mute, deafen, and
-participant/speaking indicators. Video calls and screen sharing remain deferred.
+Voice rooms have join/leave, mute, deafen, and participant/speaking indicators.
+A camera and a shared window or desk can be turned on during a call. Picture
+quality (720, 1080, or HQ) and frame rate (15, 30, or 60) are separate choices
+remembered on the device. The default is 1080 at 30. Nothing is recorded.
 
 ## Architecture
 
@@ -47,8 +49,8 @@ outside active compilation and tests.
 local drafts, draws on canvas, and talks to the backend over HTTP and Phoenix
 Channels. Audio uses WebRTC through the separate LiveKit service. The renderer has no Node integration; a sandboxed, isolated preload
 exposes API requests, local Canvas storage, and export saving. Remote navigation
-is denied; media permissions allow only microphone capture from the bundled
-desktop page. HTTPS is required except on localhost for development.
+is denied; media permissions allow the microphone, camera, and display capture
+only from the bundled desktop page. HTTPS is required except on localhost for development.
 
 Phoenix provides `/api` JSON endpoints and `/socket` authenticated WebSockets.
 One SQLite database holds channels, messages and image bytes (base64 in message

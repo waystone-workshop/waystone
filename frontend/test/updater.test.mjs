@@ -69,13 +69,32 @@ test("a newer release replaces a downloaded update and quit installs only the la
   latest = "0.6.2";
   await controller.check();
   assert.equal(controller.status().version, "0.6.2");
-  assert.match(controller.status().message, /One restart installs it/);
+  assert.match(controller.status().message, /installs it when it opens/);
   assert.equal(installs, 0);
   app.quit();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(installs, 1);
   assert.deepEqual(installerArgs, [true, true]);
   assert.equal(controller.status().version, "0.6.2");
+});
+
+test("opening Waystone installs a downloaded update without asking", async () => {
+  const updater = new EventEmitter();
+  let installerArgs;
+  let confirmed = false;
+  updater.checkForUpdates = async () => {
+    const downloadPromise = Promise.resolve().then(() => updater.emit("update-downloaded", { version: "0.6.5" }));
+    return { updateInfo: { version: "0.6.5" }, downloadPromise };
+  };
+  updater.quitAndInstall = (...args) => { installerArgs = args; };
+  const controller = createUpdater({
+    app: { isPackaged: true, getVersion: () => "0.6.4" }, updater, platform: "win32",
+    publish() {}, confirmInstall: async () => { confirmed = true; return false; }, openRelease: async () => {},
+  });
+  await controller.check({ installOnReady: true });
+  assert.deepEqual(installerArgs, [true, true]);
+  assert.equal(confirmed, false);
+  assert.equal(controller.status().phase, "downloaded");
 });
 
 test("unsigned macOS builds offer the fixed release page rather than claiming automatic install", async () => {

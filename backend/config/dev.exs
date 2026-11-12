@@ -6,6 +6,8 @@ config :waystone, :voice,
   api_secret: "waystone-local-development-secret-only"
 
 # Configure your database
+config :waystone, Waystone.Chat.Files, root: Path.expand("../tmp/dev-files", __DIR__)
+
 config :waystone, Waystone.Repo,
   database: Path.expand("../waystone_dev.db", __DIR__),
   pool_size: 5,

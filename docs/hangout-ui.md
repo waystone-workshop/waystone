@@ -87,6 +87,7 @@ and backend must be shipped through the usual release pipeline.
 
 Set `WAYSTONE_TEST_LARGE_MEDIA=1` for `npm run test:accounts` to exercise full-size
 10 MB avatar and 20 MB banner GIF uploads through the desktop and real HTTP API.
-The existing 29 MB JSON parser and 29 MiB nginx limits accommodate a 20 MiB file
-after base64 encoding (about 28 MB). Profile upload requests allow three minutes
-for slower connections. Chat attachment limits remain 5 MB per image.
+The JSON parser stays at 29 MB, which still fits a 20 MB profile image after
+base64 encoding. Shared files upload as raw bytes, up to 256 MB, and nginx
+accepts that size. Profile upload requests allow three minutes for slower
+connections. Chat pictures remain 5 MB each.
