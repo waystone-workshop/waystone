@@ -5,7 +5,7 @@ defmodule Waystone.Chat do
 
   import Ecto.Query
 
-  alias Waystone.Chat.Message
+  alias Waystone.Chat.{Message, Reaction}
   alias Waystone.Repo
 
   def topic(channel_id), do: "chat:#{channel_id}"
@@ -250,15 +250,43 @@ defmodule Waystone.Chat do
     end
   end
 
+  def toggle_reaction(%Waystone.Accounts.User{} = user, message_id, name) do
+    with {:ok, id} <- parse_id(message_id),
+         %Message{} = message <- Repo.get(Message, id) do
+      case Repo.get_by(Reaction, message_id: id, user_id: user.id, name: normalize_reaction(name)) do
+        %Reaction{} = reaction ->
+          Repo.delete!(reaction)
+          {:ok, broadcast_reactions(message)}
+
+        nil ->
+          case Waystone.Chat.Expressions.known_emoji(name) do
+            {:ok, emoji} ->
+              %Reaction{}
+              |> Reaction.changeset(%{message_id: id, user_id: user.id, name: emoji})
+              |> Repo.insert!()
+
+              {:ok, broadcast_reactions(message)}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
+      end
+    else
+      _ -> {:error, :not_found}
+    end
+  end
+
   def present_message(message), do: hd(present([message]))
 
   def present(messages) do
     replies = reply_lookup(messages)
+    reactions = reaction_lookup(messages)
 
     Enum.map(messages, fn message ->
       message
       |> message_json()
       |> Map.put(:reply, reply_snapshot(Map.get(replies, Map.get(message, :reply_to_id))))
+      |> Map.put(:reactions, Map.get(reactions, Map.get(message, :id), []))
     end)
   end
 
@@ -274,6 +302,50 @@ defmodule Waystone.Chat do
       edited_at: Map.get(message, :edited_at)
     }
   end
+
+  defp broadcast_reactions(message) do
+    payload = %{
+      id: message.id,
+      channel_id: message.channel_id,
+      reactions: Map.get(reaction_lookup([message]), message.id, [])
+    }
+
+    WaystoneWeb.Endpoint.broadcast(topic(message.channel_id), "reaction", payload)
+    payload
+  end
+
+  defp reaction_lookup(messages) do
+    ids = Enum.map(messages, &Map.get(&1, :id))
+
+    if ids == [] do
+      %{}
+    else
+      Repo.all(
+        from r in Reaction,
+          where: r.message_id in ^ids,
+          order_by: [asc: r.name, asc: r.user_id],
+          select: %{message_id: r.message_id, name: r.name, user_id: r.user_id}
+      )
+      |> Enum.group_by(& &1.message_id)
+      |> Map.new(fn {id, rows} ->
+        grouped =
+          rows
+          |> Enum.group_by(& &1.name)
+          |> Enum.map(fn {name, people} ->
+            %{name: name, user_ids: Enum.map(people, & &1.user_id)}
+          end)
+          |> Enum.sort_by(& &1.name)
+
+        {id, grouped}
+      end)
+    end
+  end
+
+  defp normalize_reaction(name) when is_binary(name) do
+    name |> String.trim() |> String.downcase()
+  end
+
+  defp normalize_reaction(_), do: ""
 
   defp reply_target(_channel_id, nil), do: {:ok, nil}
   defp reply_target(_channel_id, ""), do: {:ok, nil}

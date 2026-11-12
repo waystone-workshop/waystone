@@ -47,6 +47,7 @@ defmodule WaystoneWeb.Router do
     post "/channels/:id/messages", ApiController, :send_message
     put "/messages/:id", ApiController, :update_message
     delete "/messages/:id", ApiController, :delete_message
+    post "/messages/:id/reactions", ApiController, :react
     get "/server", ApiController, :server
     put "/server", ApiController, :update_server
     get "/expressions", ApiController, :expressions

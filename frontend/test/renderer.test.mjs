@@ -134,6 +134,11 @@ test("renderer sends text, pictures and drawings, exports a range, and restores 
     assert.equal($("call-camera").getAttribute("data-icon"), "video");
     assert.equal($("call-share").getAttribute("data-icon"), "screen");
     assert.equal($("expressions").getAttribute("data-icon"), "smile");
+    assert.equal($("picture").getAttribute("data-icon"), "image");
+    assert.equal($("share-file").getAttribute("data-icon"), "upload");
+    assert.equal($("draw").getAttribute("data-icon"), "draw");
+    assert.equal($("settings-open").getAttribute("data-icon"), "settings");
+    assert.equal($("expression-dialog").querySelector("#expression-form"), null);
     $("settings-open").click();
     assert.equal(w.document.querySelector('[data-settings-page="server"]').hidden, false);
     w.document.querySelector('[data-settings-page="server"]').click();

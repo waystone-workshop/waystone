@@ -188,6 +188,18 @@ export async function startBackend() {
       message.body = params.body;
       message.edited_at = new Date().toISOString();
       data = message;
+    } else if (/^\/api\/messages\/\d+\/reactions$/.test(url.pathname) && req.method === "POST") {
+      const id = Number(url.pathname.split("/")[3]);
+      const message = messages.find((item) => item.id === id);
+      message.reactions = message.reactions || [];
+      const name = String(params.name || "").trim().toLowerCase();
+      const existing = message.reactions.find((reaction) => reaction.name === name);
+      if (existing?.user_ids?.includes(user.id)) {
+        existing.user_ids = existing.user_ids.filter((entry) => entry !== user.id);
+        if (!existing.user_ids.length) message.reactions = message.reactions.filter((reaction) => reaction !== existing);
+      } else if (existing) existing.user_ids.push(user.id);
+      else message.reactions.push({ name, user_ids: [user.id] });
+      data = { id, channel_id: message.channel_id, reactions: message.reactions };
     } else if (/^\/api\/messages\/\d+$/.test(url.pathname) && req.method === "DELETE") {
       const id = Number(url.pathname.split("/")[3]);
       const index = messages.findIndex((item) => item.id === id);

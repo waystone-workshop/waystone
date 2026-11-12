@@ -72,16 +72,21 @@ or underscores. The person who added one, or a moderator, can remove it. The
 picture stays on disk beside the database, and a message keeps only the name.
 
 Who may upload, how large a picture can be, and how many the shelf holds are
-server settings. An admin changes them under Settings → Expressions. They are
-stored with the room, not in anyone’s device preferences. Voice, picture
-quality, and the tray stay on the device.
+server settings. An admin changes them under Settings → Expressions. Adding a
+picture, and removing one you added, happens on that same page. The emoji
+button in the composer only picks one. They are stored with the room, not in
+anyone’s device preferences. Voice, picture quality, and the tray stay on the
+device.
+
+A message can carry reactions. The reaction button on a message uses the room’s
+emoji. Choosing one adds it, and choosing it again removes yours. The count
+sits under the message.
 
 ## Still outside this pass
 
 - Global message search, unread counters, and persistent read markers.
 - Custom activity/status text and automatic away/idle detection.
 - Sharing a board as a first-class message attachment with a generated preview.
-- Emoji reactions on a message.
 - Avatar/banner crop-position controls.
 - Dedicated audio-device selection and volume controls per participant.
 

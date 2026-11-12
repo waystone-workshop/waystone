@@ -6,7 +6,7 @@ export function matchingSettings(items, query) {
   return items.filter((item) => !needle || `${item.label} ${item.group} ${item.keywords}`.toLowerCase().includes(needle));
 }
 
-export function setupSettings({ document, bridge, report, openProfile, user, avatar, storage, onVideoChange }) {
+export function setupSettings({ document, bridge, report, openProfile, user, avatar, storage, onVideoChange, permit, onExpressions }) {
   const $ = (id) => document.getElementById(id);
   const links = [...document.querySelectorAll("[data-settings-page]")];
   const panels = [...document.querySelectorAll("[data-settings-panel]")];
@@ -19,10 +19,12 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
     for (const link of links) link.classList.toggle("active", link.dataset.settingsPage === next && !link.hidden);
     if (next === "audio") { loadAudio(); loadVideo(); }
     if (next === "account") renderAccount();
+    if (next === "server") onExpressions?.();
   }
 
   function permitted(link) {
     const required = link.dataset.settingsRole;
+    if (required === "expressions") return permit ? permit() : user()?.role === "admin";
     return !required || user()?.role === required;
   }
 

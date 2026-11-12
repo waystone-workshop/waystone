@@ -87,6 +87,8 @@ const settings = setupSettings({
   document, bridge: window.waystone, report, openProfile: () => $("profile-open").click(),
   user: () => currentUser, avatar: (person) => profiles.avatar(person),
   onVideoChange: () => call.applyVideo().catch(report),
+  permit: () => currentUser?.role === "admin" || canManage() || canAddExpressions(),
+  onExpressions: () => renderExpressionShelf(),
 });
 $("settings-open").onclick = () => { settings.open(); $("settings-dialog").showModal(); };
 $("space-open").onclick = () => { $("space-search").value = ""; renderSpaces(); $("space-dialog").showModal(); $("space-search").focus(); };
@@ -525,6 +527,10 @@ async function switchChannel(channel) {
     if (version !== generation) return;
     dropMessage(event.id);
   });
+  subscription.on("reaction", (event) => {
+    if (version !== generation) return;
+    applyReaction(event);
+  });
   // Every successful join, including a reconnect, reloads history. Older loaded history is kept.
   subscription
     .join()
@@ -556,9 +562,13 @@ async function switchChannel(channel) {
       ),
     );
 }
-function renderMessages() {
-  const list = $("messages"),
-    nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+function renderMessages(pin) {
+  const list = $("messages");
+  const top = list.scrollTop;
+  const height = list.scrollHeight;
+  const nearBottom = height - top - list.clientHeight < 80;
+  const stick = pin === "bottom" || (pin !== "prepend" && pin !== "keep" && nearBottom);
+  list.dataset.stick = stick ? "1" : "0";
   if (!messages.length) {
     list.replaceChildren(
       el("div", "A fresh page. Start the conversation.", "empty"),
@@ -597,6 +607,8 @@ function renderMessages() {
       content.append(meta);
       if (message.reply) content.append(replyQuote(message.reply));
       if (message.body) content.append(renderBody(message.body));
+      const reactions = reactionRow(message);
+      if (reactions) content.append(reactions);
       for (const attachment of message.attachments || []) {
         if (attachment.kind === "sticker") {
           content.append(stickerTile(attachment));
@@ -632,10 +644,12 @@ function renderMessages() {
           try {
             if (local) {
               image.src = canvases.preview(local);
+              if (list.dataset.stick === "1") list.scrollTop = list.scrollHeight;
               return;
             }
             if (imageCache.has(attachment.id)) {
               image.src = imageCache.get(attachment.id);
+              if (list.dataset.stick === "1") list.scrollTop = list.scrollHeight;
               return;
             }
             const bytes = await api(
@@ -649,6 +663,7 @@ function renderMessages() {
             imageUrls.push(url);
             imageCache.set(attachment.id, url);
             image.src = url;
+            if (list.dataset.stick === "1") list.scrollTop = list.scrollHeight;
           } catch {
             image.alt = "Image unavailable — reconnect and reload the channel.";
           }
@@ -663,20 +678,24 @@ function renderMessages() {
       return row;
     }),
   );
-  if (nearBottom) list.scrollTop = list.scrollHeight;
+  if (pin === "prepend") list.scrollTop = top + list.scrollHeight - height;
+  else if (stick) {
+    list.scrollTop = list.scrollHeight;
+    requestAnimationFrame(() => {
+      if (list.dataset.stick === "1") list.scrollTop = list.scrollHeight;
+    });
+  } else list.scrollTop = top;
 }
 $("older").onclick = async () => {
-  const version = generation,
-    oldHeight = $("messages").scrollHeight;
+  const version = generation;
   try {
     const result = await api(
       `/channels/${channelId}/messages?before=${messages[0].id}`,
     );
     if (version !== generation) return;
     messages = mergeMessages(messages, result.messages);
-    renderMessages();
+    renderMessages("prepend");
     $("older").hidden = result.messages.length < 100;
-    $("messages").scrollTop += $("messages").scrollHeight - oldHeight;
   } catch (error) {
     report(error);
   }
@@ -717,7 +736,7 @@ $("composer").onsubmit = async (event) => {
       editing = null;
       $("body").value = localStorage.getItem(draftKey()) || "";
       renderContext();
-      renderMessages();
+      renderMessages("keep");
       notify("");
       return;
     }
@@ -749,8 +768,7 @@ $("composer").onsubmit = async (event) => {
     $("body").value = "";
     saveDraft();
     $("draft-status").textContent = "";
-    renderMessages();
-    $("messages").scrollTop = $("messages").scrollHeight;
+    renderMessages("bottom");
     notify("");
   } catch (error) {
     report(error);
@@ -759,6 +777,7 @@ $("composer").onsubmit = async (event) => {
     $("send").disabled = !channelId;
     $("body").disabled = false;
     $("body").focus();
+    if ($("messages").dataset.stick === "1") $("messages").scrollTop = $("messages").scrollHeight;
   }
 };
 $("body").onkeydown = (event) => {
@@ -784,6 +803,7 @@ function actionButton(name, label, onClick) {
 }
 function messageActions(message) {
   const actions = el("div", undefined, "message-actions");
+  actions.append(actionButton("smile", "Add reaction", () => openExpressions("react", message)));
   actions.append(actionButton("reply", "Reply", () => startReply(message)));
   if (message.user_id && message.user_id === currentUser?.id)
     actions.append(actionButton("pen", "Edit", () => startEdit(message)));
@@ -932,6 +952,7 @@ function applyServerPolicy(policy) {
   if (!policy || typeof policy.expression_uploads !== "string") return;
   serverPolicy = policy;
   renderServerPolicy();
+  settings.refresh();
   if ($("expression-dialog").open) renderExpressionGrid();
 }
 function renderServerPolicy() {
@@ -940,6 +961,8 @@ function renderServerPolicy() {
   $("emoji-max-kb").value = String(Math.round((serverPolicy.emoji_max_bytes || 262144) / 1024));
   $("sticker-max-kb").value = String(Math.round((serverPolicy.sticker_max_bytes || 524288) / 1024));
   $("expression-limit").value = String(serverPolicy.expression_limit || 200);
+  if ($("expression-policy")) $("expression-policy").hidden = currentUser?.role !== "admin";
+  renderExpressionShelf();
 }
 async function loadServerSettings() {
   applyServerPolicy(await api("/server"));
@@ -951,18 +974,56 @@ async function loadExpressions() {
     stickers: Array.isArray(result.stickers) ? result.stickers : [],
   };
   if (!$("workspace").hidden) renderMessages();
+  renderExpressionShelf();
 }
 let expressionKind = "emoji";
+let expressionPurpose = "insert";
+let reactingTo = null;
+function reactionRow(message) {
+  const reactions = message.reactions || [];
+  if (!reactions.length) return null;
+  const row = el("div", undefined, "reactions");
+  for (const reaction of reactions) {
+    const mine = (reaction.user_ids || []).includes(currentUser?.id);
+    const button = el("button", undefined, mine ? "reaction mine" : "reaction");
+    button.type = "button";
+    button.title = reaction.name;
+    const emoji = library.emoji.find((item) => item.name === reaction.name);
+    if (emoji) {
+      const image = el("img");
+      image.alt = reaction.name;
+      loadExpression(emoji, image);
+      button.append(image);
+    } else button.append(el("span", `:${reaction.name}:`));
+    button.append(el("span", String((reaction.user_ids || []).length)));
+    button.onclick = () => toggleReaction(message, reaction.name).catch(report);
+    row.append(button);
+  }
+  return row;
+}
+function applyReaction(event) {
+  if (!event?.id) return;
+  messages = messages.map((message) =>
+    message.id === event.id ? { ...message, reactions: event.reactions || [] } : message,
+  );
+  renderMessages();
+}
+async function toggleReaction(message, name) {
+  applyReaction(await api(`/messages/${message.id}/reactions`, { method: "POST", body: { name } }));
+}
+function openExpressions(purpose, message) {
+  expressionPurpose = purpose;
+  reactingTo = message || null;
+  expressionKind = "emoji";
+  renderExpressionGrid();
+  $("expression-dialog").showModal();
+}
 function renderExpressionGrid() {
+  if (expressionPurpose === "react") expressionKind = "emoji";
+  $("expression-title").textContent = expressionPurpose === "react" ? "Add a reaction" : "Emoji and stickers";
+  $("sticker-tab").hidden = expressionPurpose === "react";
   $("emoji-tab").setAttribute("aria-pressed", String(expressionKind === "emoji"));
   $("sticker-tab").setAttribute("aria-pressed", String(expressionKind === "sticker"));
-  const allowed = canAddExpressions();
-  $("expression-form").hidden = !allowed;
-  $("expression-hint").textContent = allowed
-    ? expressionKind === "emoji"
-      ? `Emoji drop into a message as :name:. PNG, JPEG, GIF, or WebP, up to ${kilobytes(serverPolicy.emoji_max_bytes)}.`
-      : `Stickers send on their own. PNG, JPEG, GIF, or WebP, up to ${kilobytes(serverPolicy.sticker_max_bytes)}.`
-    : "This room is not accepting new emoji or stickers.";
   const items = expressionKind === "emoji" ? library.emoji : library.stickers;
   const grid = $("expression-grid");
   grid.replaceChildren();
@@ -980,6 +1041,36 @@ function renderExpressionGrid() {
     button.append(image, el("span", item.name));
     button.onclick = () => useExpression(item).catch(report);
     card.append(button);
+    grid.append(card);
+  }
+}
+function renderExpressionShelf() {
+  const form = $("expression-form");
+  if (!form) return;
+  const allowed = canAddExpressions();
+  const kind = $("expression-kind")?.value || "emoji";
+  form.hidden = !allowed;
+  if ($("expression-hint")) {
+    $("expression-hint").textContent = allowed
+      ? kind === "sticker"
+        ? `Stickers send on their own. PNG, JPEG, GIF, or WebP, up to ${kilobytes(serverPolicy.sticker_max_bytes)}.`
+        : `Emoji drop into a message as :name:. PNG, JPEG, GIF, or WebP, up to ${kilobytes(serverPolicy.emoji_max_bytes)}.`
+      : "This room is not accepting new emoji or stickers.";
+  }
+  const shelf = $("expression-shelf");
+  if (!shelf) return;
+  const items = [...library.emoji, ...library.stickers];
+  shelf.replaceChildren();
+  if (!items.length) {
+    shelf.append(el("p", "No custom emoji or stickers yet.", "subtle"));
+    return;
+  }
+  for (const item of items) {
+    const card = el("div", undefined, "expression-item");
+    const image = el("img");
+    image.alt = item.name;
+    loadExpression(item, image);
+    card.append(image, el("span", `${item.kind === "sticker" ? "Sticker" : "Emoji"} · ${item.name}`));
     if (item.user_id === currentUser?.id || canManage()) {
       const remove = el("button", "Remove", "expression-remove");
       remove.type = "button";
@@ -992,7 +1083,8 @@ function renderExpressionGrid() {
           const url = expressionUrls.get(item.id);
           if (url) URL.revokeObjectURL(url);
           expressionUrls.delete(item.id);
-          renderExpressionGrid();
+          renderExpressionShelf();
+          if ($("expression-dialog").open) renderExpressionGrid();
           renderMessages();
         } catch (error) {
           report(error);
@@ -1000,10 +1092,15 @@ function renderExpressionGrid() {
       };
       card.append(remove);
     }
-    grid.append(card);
+    shelf.append(card);
   }
 }
 async function useExpression(item) {
+  if (expressionPurpose === "react" && reactingTo) {
+    await toggleReaction(reactingTo, item.name);
+    $("expression-dialog").close();
+    return;
+  }
   if (item.kind !== "sticker") {
     const area = $("body");
     const token = `:${item.name}:`;
@@ -1028,8 +1125,7 @@ async function useExpression(item) {
     messages = mergeMessages(messages, [message]);
     replying = null;
     renderContext();
-    renderMessages();
-    $("messages").scrollTop = $("messages").scrollHeight;
+    renderMessages("bottom");
     $("expression-dialog").close();
   } finally {
     sending = false;
@@ -1042,11 +1138,8 @@ function bytesToBase64(bytes) {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
   return btoa(binary);
 }
-$("expressions").onclick = () => {
-  expressionKind = "emoji";
-  renderExpressionGrid();
-  $("expression-dialog").showModal();
-};
+$("expressions").onclick = () => openExpressions("insert");
+$("expression-kind")?.addEventListener("change", () => renderExpressionShelf());
 $("emoji-tab").onclick = () => {
   expressionKind = "emoji";
   renderExpressionGrid();
@@ -1085,7 +1178,7 @@ $("expression-form").onsubmit = async (event) => {
     const created = await api("/expressions", {
       method: "POST",
       body: {
-        kind: expressionKind,
+        kind: $("expression-kind").value,
         name: $("expression-name").value,
         data: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
       },
@@ -1095,7 +1188,8 @@ $("expression-form").onsubmit = async (event) => {
       a.name.localeCompare(b.name),
     );
     $("expression-form").reset();
-    renderExpressionGrid();
+    renderExpressionShelf();
+    if ($("expression-dialog").open) renderExpressionGrid();
   } catch (error) {
     report(error);
   } finally {
