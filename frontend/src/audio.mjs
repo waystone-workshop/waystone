@@ -164,12 +164,35 @@ export class AudioCall {
   }
 
   unmount(track) {
-    this.mounted.delete(track);
-    for (const node of track.detach?.() || []) {
-      const tile = node.closest?.(".call-tile");
-      (tile || node).remove();
-    }
+    this.releaseTrack(track);
     this.refreshMedia();
+  }
+
+  releaseTrack(track) {
+    if (!track) return;
+    this.mounted.delete(track);
+    for (const node of track.detach?.() || []) this.releaseElement(node);
+    track.mediaStreamTrack?.stop?.();
+    track.stop?.();
+  }
+
+  releaseElement(node) {
+    node.pause?.();
+    node.srcObject = null;
+    const tile = node.closest?.(".call-tile");
+    (tile || node).remove?.();
+  }
+
+  clearStage() {
+    for (const root of [this.mediaRoot, this.audioHost]) {
+      if (!root?.querySelectorAll) continue;
+      for (const node of root.querySelectorAll("video, audio")) this.releaseElement(node);
+    }
+    this.mounted.clear();
+    this.audioHost?.replaceChildren?.();
+    this.videoStage?.replaceChildren?.();
+    this.videoCameras?.replaceChildren?.();
+    if (this.mediaRoot) this.mediaRoot.hidden = true;
   }
 
   refreshMedia() {
@@ -183,10 +206,21 @@ export class AudioCall {
     if (!room || this.state !== "connected" || this.changingCamera) return;
     this.changingCamera = true;
     try {
+      if (!enabled) {
+        const publication = room.localParticipant.getTrackPublication?.(this.cameraSource);
+        const track = publication?.track;
+        if (track) await room.localParticipant.unpublishTrack?.(track, true);
+        if (room !== this.room) return;
+        this.releaseTrack(track);
+        this.cameraOn = false;
+        this.refreshMedia();
+        this.update();
+        return;
+      }
       const capture = this.capture();
-      await room.localParticipant.setCameraEnabled(enabled, { resolution: capture.resolution }, { videoEncoding: capture.encoding });
+      await room.localParticipant.setCameraEnabled(true, { resolution: capture.resolution }, { videoEncoding: capture.encoding });
       if (room !== this.room) return;
-      this.cameraOn = enabled;
+      this.cameraOn = true;
       this.update();
     } catch (error) { this.failed(error); }
     finally { this.changingCamera = false; }
@@ -261,13 +295,20 @@ export class AudioCall {
     this.cameraOn = false;
     this.sharing = false;
     this.playbackBlocked = false;
-    this.mounted.clear();
-    this.audioHost.replaceChildren();
-    this.videoStage?.replaceChildren?.();
-    this.videoCameras?.replaceChildren?.();
-    this.refreshMedia();
-    // disconnect(true) stops all local microphone tracks as well as transports.
-    if (room) Promise.resolve(room.disconnect(true)).catch(() => {});
+    for (const participant of room ? [room.localParticipant, ...room.remoteParticipants.values()] : []) {
+      const lists = [participant?.videoTrackPublications, participant?.trackPublications];
+      for (const list of lists) {
+        if (!list?.values) continue;
+        for (const publication of list.values()) {
+          if (list === participant.videoTrackPublications || publication?.track?.kind === "video" || publication?.kind === "video")
+            this.releaseTrack(publication?.track);
+        }
+      }
+    }
+    // Clearing the stream before the element leaves the page is what actually
+    // takes the picture down. Removing the node alone can leave the last frame up.
+    this.clearStage();
+    if (room) Promise.resolve(room.disconnect(true)).finally(() => { if (this.state === "idle") this.clearStage(); }).catch(() => {});
     this.update();
   }
 }

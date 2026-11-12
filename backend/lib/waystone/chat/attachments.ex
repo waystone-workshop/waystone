@@ -18,6 +18,10 @@ defmodule Waystone.Chat.Attachments do
     Waystone.Chat.Files.attachment(user, channel_id, id)
   end
 
+  defp validate_one(%{"kind" => "sticker", "expression_id" => id}, _user, _channel_id) do
+    Waystone.Chat.Expressions.sticker_attachment(id)
+  end
+
   defp validate_one(%{"data" => data} = item, _user, _channel_id)
        when is_binary(data) and byte_size(data) <= 7_000_000 do
     with {:ok, _bytes, mime, ext} <- Waystone.Media.decode_image(data, @max_bytes),

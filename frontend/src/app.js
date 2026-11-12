@@ -35,7 +35,17 @@ let preview = "",
   exportVersion = 0,
   exporting = false,
   sending = false,
-  imageUrls = [];
+  imageUrls = [],
+  replying = null,
+  editing = null;
+let library = { emoji: [], stickers: [] };
+let serverPolicy = {
+  expression_uploads: "member",
+  emoji_max_bytes: 262144,
+  sticker_max_bytes: 524288,
+  expression_limit: 200,
+};
+const expressionUrls = new Map();
 const stored = JSON.parse(localStorage.getItem("waystone-preferences") || "{}");
 $("server").value = stored.server || process.env.WAYSTONE_SERVER_URL;
 $("name").value = stored.name || "";
@@ -60,6 +70,7 @@ function applyUser(user) {
   $("add-channel").hidden = !manages;
   $("delete-channel").hidden = !manages;
   $("add-voice-room").hidden = !manages;
+  settings.refresh();
 }
 const profiles = setupProfiles({ document, api, changed: applyUser, signedOut: () => signOut(false), report });
 const peoplePreference = localStorage.getItem("waystone-people-open") !== "false";
@@ -125,6 +136,7 @@ const call = new AudioCall({
   changed: ({ state, muted, deafened, participants, playbackBlocked, camera, sharing }) => {
     voiceState = { state, muted, deafened, participants, playbackBlocked, camera, sharing };
     const idle = state === "idle";
+    if (idle) $("call-media").hidden = true;
     $("join-audio").hidden = !idle;
     $("join-audio").disabled = false;
     $("call-panel").hidden = idle;
@@ -248,6 +260,7 @@ function saveDraft() {
   if (channelId) localStorage.setItem(draftKey(), $("body").value);
 }
 $("body").addEventListener("input", () => {
+  if (editing) return;
   saveDraft();
   $("draft-status").textContent = "Draft saved locally";
 });
@@ -291,13 +304,20 @@ async function beginSession(user) {
     if (event.channel_id === channelId)
       notify("The channel board was updated. Open it again to load the latest saved version.");
   });
+  directory.on("server_updated", (policy) => applyServerPolicy(policy));
   directory.join().receive("ok", () => { lastVoiceState = null; loadChannels().catch(report); profiles.refresh().catch(report); });
   await profiles.refresh();
   await loadVoiceRooms();
+  await loadServerSettings().catch((error) => {
+    if (!authRejected(error)) report(error);
+  });
   $("gate-status").hidden = true;
   $("join").hidden = true;
   $("workspace").hidden = false;
   notify("");
+  loadExpressions().catch((error) => {
+    if (!authRejected(error)) report(error);
+  });
 }
 $("join-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -454,6 +474,12 @@ async function switchChannel(channel) {
   )
     return;
   const leaving = channelId;
+  if (editing || replying) {
+    editing = null;
+    replying = null;
+    $("body").value = localStorage.getItem(draftKey()) || "";
+    renderContext();
+  }
   saveDraft();
   subscription?.leave();
   generation++;
@@ -489,6 +515,15 @@ async function switchChannel(channel) {
     if (version !== generation) return;
     messages = mergeMessages(messages, [message]);
     renderMessages();
+  });
+  subscription.on("message_updated", (message) => {
+    if (version !== generation) return;
+    messages = mergeMessages(messages, [message]);
+    renderMessages();
+  });
+  subscription.on("message_deleted", (event) => {
+    if (version !== generation) return;
+    dropMessage(event.id);
   });
   // Every successful join, including a reconnect, reloads history. Older loaded history is kept.
   subscription
@@ -557,13 +592,16 @@ function renderMessages() {
       const today = date.toDateString() === new Date().toDateString();
       const time = el("time", today ? date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
       time.dateTime = message.inserted_at; time.title = date.toLocaleString();
-      meta.append(
-        author,
-        time,
-        el("span", "#" + message.id),
-      );
-      content.append(meta, el("p", message.body));
-      for (const attachment of message.attachments) {
+      meta.append(author, time, el("span", "#" + message.id));
+      if (message.edited_at) meta.append(el("span", "edited", "edited"));
+      content.append(meta);
+      if (message.reply) content.append(replyQuote(message.reply));
+      if (message.body) content.append(renderBody(message.body));
+      for (const attachment of message.attachments || []) {
+        if (attachment.kind === "sticker") {
+          content.append(stickerTile(attachment));
+          continue;
+        }
         if (attachment.kind === "file") {
           content.append(fileCard(message, attachment));
           continue;
@@ -621,7 +659,7 @@ function renderMessages() {
       const portrait = el(message.user_id ? "button" : "span", undefined, "message-avatar");
       portrait.append(profiles.avatar(profiles.get(message.user_id) || { display_name: message.author, avatar_color: "slate" }));
       if (message.user_id) { portrait.setAttribute("aria-label", `View ${message.author}'s profile`); portrait.onclick = () => profiles.show(message.user_id, portrait); }
-      row.append(check, portrait, content);
+      row.append(check, portrait, content, messageActions(message));
       return row;
     }),
   );
@@ -660,16 +698,34 @@ $("channel-form").onsubmit = async (event) => {
 };
 $("composer").onsubmit = async (event) => {
   event.preventDefault();
-  if (!channelId || sending || (!$("body").value.trim() && !pending.length)) return;
+  const text = $("body").value;
+  const empty = !text.trim() && !pending.length;
+  if (!channelId || sending) return;
+  if (editing) {
+    if (!text.trim() && !(editing.attachments || []).length) return;
+  } else if (empty) return;
   sending = true;
   $("send").disabled = true;
   $("body").disabled = true;
-  const text = $("body").value;
   const sendVersion = generation;
+  const editingId = editing?.id;
   try {
+    if (editingId) {
+      const message = await api(`/messages/${editingId}`, { method: "PUT", body: { body: text } });
+      if (sendVersion !== generation) return;
+      messages = mergeMessages(messages, [message]);
+      editing = null;
+      $("body").value = localStorage.getItem(draftKey()) || "";
+      renderContext();
+      renderMessages();
+      notify("");
+      return;
+    }
+    const replyTo = replying?.id || null;
     const message = await api(`/channels/${channelId}/messages`, {
       body: {
         body: text,
+        reply_to: replyTo,
         attachments: pending.map((attachment) => {
           if (attachment.kind === "file")
             return { kind: "file", file_id: attachment.file_id };
@@ -687,6 +743,8 @@ $("composer").onsubmit = async (event) => {
     if (sendVersion !== generation) return;
     messages = mergeMessages(messages, [message]);
     pending = [];
+    replying = null;
+    renderContext();
     renderPending();
     $("body").value = "";
     saveDraft();
@@ -707,6 +765,341 @@ $("body").onkeydown = (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
     $("composer").requestSubmit();
+  }
+};
+function canManage() {
+  return ["admin", "moderator"].includes(currentUser?.role);
+}
+function actionButton(name, label, onClick) {
+  const button = el("button", undefined, `icon-button ${name}`);
+  button.type = "button";
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  button.innerHTML = icon(name);
+  button.onclick = (event) => {
+    event.stopPropagation();
+    onClick();
+  };
+  return button;
+}
+function messageActions(message) {
+  const actions = el("div", undefined, "message-actions");
+  actions.append(actionButton("reply", "Reply", () => startReply(message)));
+  if (message.user_id && message.user_id === currentUser?.id)
+    actions.append(actionButton("pen", "Edit", () => startEdit(message)));
+  if ((message.user_id && message.user_id === currentUser?.id) || canManage())
+    actions.append(actionButton("trash", "Delete", () => removeMessage(message).catch(report)));
+  return actions;
+}
+function startReply(message) {
+  if (editing) cancelEdit();
+  replying = message;
+  renderContext();
+  $("body").focus();
+}
+function startEdit(message) {
+  replying = null;
+  editing = message;
+  $("body").value = message.body || "";
+  renderContext();
+  $("body").focus();
+}
+function cancelEdit() {
+  editing = null;
+  $("body").value = channelId ? localStorage.getItem(draftKey()) || "" : "";
+  renderContext();
+}
+function renderContext() {
+  const bar = $("composer-context");
+  bar.replaceChildren();
+  if (editing) {
+    bar.hidden = false;
+    bar.append(el("span", "Editing your message"));
+    const cancel = el("button", "Cancel");
+    cancel.type = "button";
+    cancel.id = "cancel-context";
+    cancel.onclick = () => cancelEdit();
+    bar.append(cancel);
+    $("send").setAttribute("aria-label", "Save edit");
+    $("send").title = "Save edit";
+  } else if (replying) {
+    bar.hidden = false;
+    const text = el("span");
+    const preview = (replying.body || replying.attachments?.[0]?.name || "Attachment").slice(0, 140);
+    text.append(el("strong", `Replying to ${replying.author}`), document.createTextNode(` ${preview}`));
+    const cancel = el("button", "Cancel");
+    cancel.type = "button";
+    cancel.id = "cancel-context";
+    cancel.onclick = () => {
+      replying = null;
+      renderContext();
+    };
+    bar.append(text, cancel);
+    $("send").setAttribute("aria-label", "Send message");
+    $("send").title = "Send message";
+  } else {
+    bar.hidden = true;
+    $("send").setAttribute("aria-label", "Send message");
+    $("send").title = "Send message";
+  }
+  for (const id of ["picture", "share-file", "draw", "expressions"]) $(id).disabled = Boolean(editing);
+}
+function replyQuote(reply) {
+  const quote = el("button", undefined, "reply-quote");
+  quote.type = "button";
+  const label = reply.body || reply.attachment?.name || "Attachment";
+  quote.append(el("strong", reply.author || "Message"), el("span", label));
+  quote.onclick = () => {
+    document.querySelector(`#messages article[data-id="${reply.id}"]`)?.scrollIntoView({ block: "center" });
+  };
+  return quote;
+}
+function renderBody(text) {
+  const paragraph = el("p");
+  const pattern = /:([a-z0-9_]{2,32}):/g;
+  const source = String(text);
+  let last = 0;
+  for (const match of source.matchAll(pattern)) {
+    if (match.index > last) paragraph.append(source.slice(last, match.index));
+    const emoji = library.emoji.find((item) => item.name === match[1]);
+    if (emoji) {
+      const image = el("img");
+      image.className = "emoji";
+      image.alt = `:${emoji.name}:`;
+      image.title = `:${emoji.name}:`;
+      loadExpression(emoji, image);
+      paragraph.append(image);
+    } else paragraph.append(match[0]);
+    last = match.index + match[0].length;
+  }
+  if (last < source.length) paragraph.append(source.slice(last));
+  return paragraph;
+}
+function stickerTile(attachment) {
+  const tile = el("div", undefined, "sticker");
+  const image = el("img");
+  const known = library.stickers.find((item) => item.id === attachment.id);
+  image.alt = known ? attachment.name || "Sticker" : "Sticker no longer available";
+  if (known) loadExpression(known, image);
+  tile.append(image);
+  return tile;
+}
+function loadExpression(item, image) {
+  if (expressionUrls.has(item.id)) {
+    image.src = expressionUrls.get(item.id);
+    return;
+  }
+  api(`/expressions/${item.id}`, { binary: true })
+    .then((bytes) => {
+      const url = URL.createObjectURL(new Blob([bytes], { type: item.content_type || "image/png" }));
+      expressionUrls.set(item.id, url);
+      if (image.isConnected) image.src = url;
+    })
+    .catch(() => {
+      image.alt = "Image unavailable";
+    });
+}
+function dropMessage(id) {
+  messages = messages
+    .filter((message) => message.id !== id)
+    .map((message) => (message.reply?.id === id ? { ...message, reply: null } : message));
+  selected.delete(id);
+  if (replying?.id === id) {
+    replying = null;
+    renderContext();
+  }
+  if (editing?.id === id) cancelEdit();
+  renderMessages();
+}
+async function removeMessage(message) {
+  if (!confirm("Delete this message?")) return;
+  await api(`/messages/${message.id}`, { method: "DELETE" });
+  dropMessage(message.id);
+}
+function canAddExpressions() {
+  const who = serverPolicy.expression_uploads;
+  const role = currentUser?.role;
+  if (who === "off") return false;
+  if (who === "admin") return role === "admin";
+  if (who === "moderator") return role === "admin" || role === "moderator";
+  return Boolean(currentUser);
+}
+function kilobytes(bytes) {
+  const n = Math.round(Number(bytes) / 1024);
+  return n >= 1024 ? `${Math.round(n / 1024)} MB` : `${n} KB`;
+}
+function applyServerPolicy(policy) {
+  if (!policy || typeof policy.expression_uploads !== "string") return;
+  serverPolicy = policy;
+  renderServerPolicy();
+  if ($("expression-dialog").open) renderExpressionGrid();
+}
+function renderServerPolicy() {
+  if (!$("expression-uploads")) return;
+  $("expression-uploads").value = serverPolicy.expression_uploads || "member";
+  $("emoji-max-kb").value = String(Math.round((serverPolicy.emoji_max_bytes || 262144) / 1024));
+  $("sticker-max-kb").value = String(Math.round((serverPolicy.sticker_max_bytes || 524288) / 1024));
+  $("expression-limit").value = String(serverPolicy.expression_limit || 200);
+}
+async function loadServerSettings() {
+  applyServerPolicy(await api("/server"));
+}
+async function loadExpressions() {
+  const result = await api("/expressions");
+  library = {
+    emoji: Array.isArray(result.emoji) ? result.emoji : [],
+    stickers: Array.isArray(result.stickers) ? result.stickers : [],
+  };
+  if (!$("workspace").hidden) renderMessages();
+}
+let expressionKind = "emoji";
+function renderExpressionGrid() {
+  $("emoji-tab").setAttribute("aria-pressed", String(expressionKind === "emoji"));
+  $("sticker-tab").setAttribute("aria-pressed", String(expressionKind === "sticker"));
+  const allowed = canAddExpressions();
+  $("expression-form").hidden = !allowed;
+  $("expression-hint").textContent = allowed
+    ? expressionKind === "emoji"
+      ? `Emoji drop into a message as :name:. PNG, JPEG, GIF, or WebP, up to ${kilobytes(serverPolicy.emoji_max_bytes)}.`
+      : `Stickers send on their own. PNG, JPEG, GIF, or WebP, up to ${kilobytes(serverPolicy.sticker_max_bytes)}.`
+    : "This room is not accepting new emoji or stickers.";
+  const items = expressionKind === "emoji" ? library.emoji : library.stickers;
+  const grid = $("expression-grid");
+  grid.replaceChildren();
+  if (!items.length) {
+    grid.append(el("p", expressionKind === "emoji" ? "No custom emoji yet." : "No stickers yet.", "subtle"));
+    return;
+  }
+  for (const item of items) {
+    const card = el("div", undefined, "expression-item");
+    const button = el("button");
+    button.type = "button";
+    const image = el("img");
+    image.alt = item.name;
+    loadExpression(item, image);
+    button.append(image, el("span", item.name));
+    button.onclick = () => useExpression(item).catch(report);
+    card.append(button);
+    if (item.user_id === currentUser?.id || canManage()) {
+      const remove = el("button", "Remove", "expression-remove");
+      remove.type = "button";
+      remove.onclick = async () => {
+        if (!confirm(`Remove :${item.name}:?`)) return;
+        try {
+          await api(`/expressions/${item.id}`, { method: "DELETE" });
+          const key = item.kind === "sticker" ? "stickers" : "emoji";
+          library[key] = library[key].filter((entry) => entry.id !== item.id);
+          const url = expressionUrls.get(item.id);
+          if (url) URL.revokeObjectURL(url);
+          expressionUrls.delete(item.id);
+          renderExpressionGrid();
+          renderMessages();
+        } catch (error) {
+          report(error);
+        }
+      };
+      card.append(remove);
+    }
+    grid.append(card);
+  }
+}
+async function useExpression(item) {
+  if (item.kind !== "sticker") {
+    const area = $("body");
+    const token = `:${item.name}:`;
+    const start = area.selectionStart ?? area.value.length;
+    const end = area.selectionEnd ?? start;
+    area.value = area.value.slice(0, start) + token + area.value.slice(end);
+    if (!editing) saveDraft();
+    area.focus();
+    $("expression-dialog").close();
+    return;
+  }
+  if (!channelId || sending || editing) return;
+  sending = true;
+  try {
+    const message = await api(`/channels/${channelId}/messages`, {
+      body: {
+        body: "",
+        reply_to: replying?.id || null,
+        attachments: [{ kind: "sticker", expression_id: item.id }],
+      },
+    });
+    messages = mergeMessages(messages, [message]);
+    replying = null;
+    renderContext();
+    renderMessages();
+    $("messages").scrollTop = $("messages").scrollHeight;
+    $("expression-dialog").close();
+  } finally {
+    sending = false;
+  }
+}
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk)
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return btoa(binary);
+}
+$("expressions").onclick = () => {
+  expressionKind = "emoji";
+  renderExpressionGrid();
+  $("expression-dialog").showModal();
+};
+$("emoji-tab").onclick = () => {
+  expressionKind = "emoji";
+  renderExpressionGrid();
+};
+$("sticker-tab").onclick = () => {
+  expressionKind = "sticker";
+  renderExpressionGrid();
+};
+$("server-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const button = event.submitter || $("server-form").querySelector("button");
+  button.disabled = true;
+  try {
+    applyServerPolicy(await api("/server", {
+      method: "PUT",
+      body: {
+        expression_uploads: $("expression-uploads").value,
+        emoji_max_bytes: Number($("emoji-max-kb").value) * 1024,
+        sticker_max_bytes: Number($("sticker-max-kb").value) * 1024,
+        expression_limit: Number($("expression-limit").value),
+      },
+    }));
+    notify("Server settings saved.");
+  } catch (error) {
+    report(error);
+  } finally {
+    button.disabled = false;
+  }
+};
+$("expression-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const file = $("expression-file").files[0];
+  if (!file) return;
+  $("expression-upload").disabled = true;
+  try {
+    const created = await api("/expressions", {
+      method: "POST",
+      body: {
+        kind: expressionKind,
+        name: $("expression-name").value,
+        data: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
+      },
+    });
+    const key = created.kind === "sticker" ? "stickers" : "emoji";
+    library[key] = [...library[key].filter((item) => item.id !== created.id), created].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+    $("expression-form").reset();
+    renderExpressionGrid();
+  } catch (error) {
+    report(error);
+  } finally {
+    $("expression-upload").disabled = false;
   }
 };
 function formatSize(bytes) {
@@ -998,12 +1391,27 @@ async function signOut(revoke = true) {
     catch (error) { report(error); return; }
   }
   call.leave();
+  if (editing) $("body").value = localStorage.getItem(draftKey()) || "";
+  editing = null;
+  replying = null;
+  renderContext();
   saveDraft();
   forgetPending();
   socket?.disconnect();
   token = null;
   await window.waystone.clearSession?.().catch(() => {});
   currentUser = null;
+  library = { emoji: [], stickers: [] };
+  serverPolicy = {
+    expression_uploads: "member",
+    emoji_max_bytes: 262144,
+    sticker_max_bytes: 524288,
+    expression_limit: 200,
+  };
+  expressionUrls.forEach((url) => URL.revokeObjectURL(url));
+  expressionUrls.clear();
+  $("composer-context").hidden = true;
+  $("expression-dialog").close();
   profiles.clear(); directory = null; activeVoiceRoom = null; lastVoiceState = null; voiceRooms = []; spaces = [];
   for (const id of ["profile-dialog", "members-dialog", "public-profile-dialog", "settings-dialog", "space-dialog", "voice-dialog", "voice-create-dialog"]) $(id).close();
   $("password-form").reset();

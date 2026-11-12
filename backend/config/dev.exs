@@ -7,6 +7,7 @@ config :waystone, :voice,
 
 # Configure your database
 config :waystone, Waystone.Chat.Files, root: Path.expand("../tmp/dev-files", __DIR__)
+config :waystone, Waystone.Chat.Expressions, root: Path.expand("../tmp/dev-expressions", __DIR__)
 
 config :waystone, Waystone.Repo,
   database: Path.expand("../waystone_dev.db", __DIR__),

@@ -93,6 +93,12 @@ defmodule Waystone.Chat do
 
     result =
       Repo.transaction(fn ->
+        # SQLite cannot delete a message while another message in the same
+        # statement still points at it.
+        Repo.update_all(from(m in Message, where: m.channel_id == ^channel.id),
+          set: [reply_to_id: nil]
+        )
+
         Repo.delete_all(from m in Message, where: m.channel_id == ^channel.id)
         Repo.delete!(channel)
       end)
@@ -136,6 +142,8 @@ defmodule Waystone.Chat do
         author: m.author,
         user_id: m.user_id,
         body: m.body,
+        reply_to_id: m.reply_to_id,
+        edited_at: m.edited_at,
         inserted_at: m.inserted_at,
         attachments:
           type(
@@ -157,10 +165,16 @@ defmodule Waystone.Chat do
         name when is_binary(name) -> {name, nil}
       end
 
-    with {:ok, attachments} <-
+    with {:ok, reply_id} <- reply_target(channel_id, attrs["reply_to"]),
+         {:ok, attachments} <-
            Waystone.Chat.Attachments.validate(attrs["attachments"] || [], author, channel_id) do
       changeset =
-        %Message{channel_id: channel_id, attachments: attachments, user_id: user_id}
+        %Message{
+          channel_id: channel_id,
+          attachments: attachments,
+          user_id: user_id,
+          reply_to_id: reply_id
+        }
         |> Message.changeset(%{author: name, body: attrs["body"] || ""})
 
       result =
@@ -177,13 +191,75 @@ defmodule Waystone.Chat do
 
       case result do
         {:ok, message} ->
-          WaystoneWeb.Endpoint.broadcast(topic(channel_id), "message", message_json(message))
+          WaystoneWeb.Endpoint.broadcast(topic(channel_id), "message", present_message(message))
           {:ok, message}
 
         {:error, reason} ->
           {:error, reason}
       end
     end
+  end
+
+  def edit_message(%Waystone.Accounts.User{} = user, id, attrs) do
+    case Repo.get(Message, id) do
+      nil ->
+        {:error, :not_found}
+
+      %Message{user_id: owner_id} = message when owner_id == user.id ->
+        changeset =
+          message
+          |> Message.changeset(%{author: message.author, body: attrs["body"] || ""})
+          |> Ecto.Changeset.put_change(
+            :edited_at,
+            DateTime.utc_now() |> DateTime.truncate(:second)
+          )
+
+        case Repo.update(changeset) do
+          {:ok, saved} ->
+            json = present_message(saved)
+            WaystoneWeb.Endpoint.broadcast(topic(saved.channel_id), "message_updated", json)
+            {:ok, saved}
+
+          error ->
+            error
+        end
+
+      _ ->
+        {:error, :forbidden}
+    end
+  end
+
+  def delete_message(%Waystone.Accounts.User{} = user, id) do
+    case Repo.get(Message, id) do
+      nil ->
+        {:error, :not_found}
+
+      %Message{} = message ->
+        if message.user_id == user.id or Waystone.Accounts.manage_channels?(user) do
+          Repo.delete!(message)
+
+          WaystoneWeb.Endpoint.broadcast(topic(message.channel_id), "message_deleted", %{
+            id: message.id,
+            channel_id: message.channel_id
+          })
+
+          :ok
+        else
+          {:error, :forbidden}
+        end
+    end
+  end
+
+  def present_message(message), do: hd(present([message]))
+
+  def present(messages) do
+    replies = reply_lookup(messages)
+
+    Enum.map(messages, fn message ->
+      message
+      |> message_json()
+      |> Map.put(:reply, reply_snapshot(Map.get(replies, Map.get(message, :reply_to_id))))
+    end)
   end
 
   def message_json(message) do
@@ -193,10 +269,91 @@ defmodule Waystone.Chat do
       author: message.author,
       user_id: message.user_id,
       body: message.body || "",
-      attachments: Enum.map(message.attachments, &Map.drop(&1, ["data"])),
-      inserted_at: message.inserted_at
+      attachments: Enum.map(message.attachments || [], &Map.drop(&1, ["data"])),
+      inserted_at: message.inserted_at,
+      edited_at: Map.get(message, :edited_at)
     }
   end
+
+  defp reply_target(_channel_id, nil), do: {:ok, nil}
+  defp reply_target(_channel_id, ""), do: {:ok, nil}
+
+  defp reply_target(channel_id, id) do
+    with {:ok, id} <- parse_id(id),
+         %Message{channel_id: ^channel_id} <- Repo.get(Message, id) do
+      {:ok, id}
+    else
+      _ -> {:error, "Reply to a message in this channel."}
+    end
+  end
+
+  defp parse_id(id) when is_integer(id) and id > 0, do: {:ok, id}
+
+  defp parse_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {n, ""} when n > 0 -> {:ok, n}
+      _ -> :error
+    end
+  end
+
+  defp parse_id(_), do: :error
+
+  defp reply_lookup(messages) do
+    ids =
+      messages
+      |> Enum.map(&Map.get(&1, :reply_to_id))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    if ids == [] do
+      %{}
+    else
+      Repo.all(
+        from m in Message,
+          where: m.id in ^ids,
+          select: %{
+            id: m.id,
+            author: m.author,
+            user_id: m.user_id,
+            body: fragment("substr(?, 1, 140)", m.body),
+            kind:
+              fragment(
+                "(SELECT json_extract(value, '$.kind') FROM json_each(?) LIMIT 1)",
+                m.attachments
+              ),
+            name:
+              fragment(
+                "(SELECT json_extract(value, '$.name') FROM json_each(?) LIMIT 1)",
+                m.attachments
+              )
+          }
+      )
+      |> Map.new(&{&1.id, &1})
+    end
+  end
+
+  defp reply_snapshot(nil), do: nil
+
+  defp reply_snapshot(target) do
+    %{
+      id: target.id,
+      author: target.author,
+      user_id: target.user_id,
+      body: String.slice(target.body || "", 0, 140),
+      attachment: preview_attachment(target)
+    }
+  end
+
+  defp preview_attachment(%{kind: kind, name: name}) when is_binary(kind),
+    do: %{kind: kind, name: name}
+
+  defp preview_attachment(%{attachments: [first | _]}) when is_map(first) do
+    kind = first["kind"] || first[:kind]
+    name = first["name"] || first[:name]
+    if is_binary(kind), do: %{kind: kind, name: name}
+  end
+
+  defp preview_attachment(_), do: nil
 
   def name_changeset(attrs) do
     {%{}, %{display_name: :string}}

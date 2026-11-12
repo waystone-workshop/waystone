@@ -6,6 +6,7 @@ import Config
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
 config :waystone, Waystone.Chat.Files, root: Path.expand("../tmp/test-files", __DIR__)
+config :waystone, Waystone.Chat.Expressions, root: Path.expand("../tmp/test-expressions", __DIR__)
 
 config :waystone, Waystone.Repo,
   database: Path.expand("../waystone_test.db", __DIR__),

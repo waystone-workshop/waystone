@@ -40,6 +40,13 @@ export async function startBackend() {
   const boards = new Map(
     channels.map((channel) => [channel.id, makeBoard(channel)]),
   );
+  const expressions = { emoji: [], stickers: [] };
+  let serverPolicy = {
+    expression_uploads: "member",
+    emoji_max_bytes: 262144,
+    sticker_max_bytes: 524288,
+    expression_limit: 200,
+  };
   const requests = [];
   let user = { id: 1, username: "ada", display_name: "Ada", bio: "", avatar_color: "pine", role: "admin", inserted_at: "2026-11-01T12:00:00Z" };
   let websockets;
@@ -149,13 +156,55 @@ export async function startBackend() {
       res.setHeader("Content-Type", "image/png");
       res.end(png);
       return;
+    } else if (url.pathname === "/api/server") {
+      if (req.method === "PUT") serverPolicy = { ...serverPolicy, ...params };
+      data = serverPolicy;
+    } else if (url.pathname === "/api/expressions" && req.method === "GET")
+      data = expressions;
+    else if (url.pathname === "/api/expressions" && req.method === "POST") {
+      const created = {
+        id: `expr-${expressions.emoji.length + expressions.stickers.length + 1}`,
+        kind: params.kind === "sticker" ? "sticker" : "emoji",
+        name: String(params.name || "emoji").toLowerCase(),
+        content_type: "image/png",
+        byte_size: png.length,
+        user_id: user.id,
+      };
+      expressions[created.kind === "sticker" ? "stickers" : "emoji"].push(created);
+      data = created;
+    } else if (url.pathname.startsWith("/api/expressions/")) {
+      const id = decodeURIComponent(url.pathname.split("/")[3]);
+      if (req.method === "DELETE") {
+        expressions.emoji = expressions.emoji.filter((item) => item.id !== id);
+        expressions.stickers = expressions.stickers.filter((item) => item.id !== id);
+        data = { ok: true };
+      } else {
+        res.setHeader("Content-Type", "image/png");
+        res.end(png);
+        return;
+      }
+    } else if (/^\/api\/messages\/\d+$/.test(url.pathname) && req.method === "PUT") {
+      const message = messages.find((item) => item.id === Number(url.pathname.split("/")[3]));
+      message.body = params.body;
+      message.edited_at = new Date().toISOString();
+      data = message;
+    } else if (/^\/api\/messages\/\d+$/.test(url.pathname) && req.method === "DELETE") {
+      const id = Number(url.pathname.split("/")[3]);
+      const index = messages.findIndex((item) => item.id === id);
+      if (index >= 0) messages.splice(index, 1);
+      data = { ok: true };
     } else if (req.method === "POST") {
+      const target = messages.find((item) => item.id === params.reply_to);
       data = {
         id: messages.length + 1,
         channel_id: Number(url.pathname.split("/")[3]),
         author: "Ada",
         user_id: user.id,
         body: params.body,
+        reply: target
+          ? { id: target.id, author: target.author, user_id: target.user_id || null, body: target.body, attachment: null }
+          : null,
+        edited_at: null,
         attachments: (params.attachments || []).map((a, i) =>
           a.kind === "file"
             ? {
@@ -165,6 +214,8 @@ export async function startBackend() {
                 content_type: "application/octet-stream",
                 byte_size: 1280,
               }
+            : a.kind === "sticker"
+              ? { id: a.expression_id, name: "sticker", kind: "sticker" }
             : {
                 id: `image-${messages.length}-${i}`,
                 name: "drawing.png",

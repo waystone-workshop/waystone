@@ -12,6 +12,8 @@ defmodule Waystone.Chat.Message do
     field :body, :string
     belongs_to :channel, Waystone.Chat.Channel
     belongs_to :user, Waystone.Accounts.User
+    belongs_to :reply_to, __MODULE__
+    field :edited_at, :utc_datetime
     field :attachments, {:array, :map}, default: []
 
     timestamps(type: :utc_datetime)
@@ -19,6 +21,10 @@ defmodule Waystone.Chat.Message do
 
   def name_max, do: @name_max
   def body_max, do: @body_max
+
+  # Cast turns a whitespace-only value into nil before this trim runs.
+  defp trim(value) when is_binary(value), do: String.trim(value)
+  defp trim(_), do: ""
 
   defp validate_content(changeset) do
     if get_field(changeset, :body) in [nil, ""] and get_field(changeset, :attachments) == [] do
@@ -31,8 +37,8 @@ defmodule Waystone.Chat.Message do
   def changeset(message, attrs) do
     message
     |> cast(attrs, [:author, :body])
-    |> update_change(:author, &String.trim/1)
-    |> update_change(:body, &String.trim/1)
+    |> update_change(:author, &trim/1)
+    |> update_change(:body, &trim/1)
     |> validate_required([:author])
     |> validate_content()
     |> validate_length(:author, min: 1, max: @name_max)
