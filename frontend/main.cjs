@@ -1,10 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, Tray, Menu, nativeImage, safeStorage } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, Tray, Menu, nativeImage, safeStorage, desktopCapturer } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const { createUpdater } = require("./updater.cjs");
 const { normalizeDesktopSettings, mergeDesktopSettings, hideOnClose } = require("./desktop-settings.cjs");
 const { prepareSession, readStoredSession } = require("./session-store.cjs");
-const { join } = require("node:path");
+const { basename, join } = require("node:path");
+const { createReadStream, createWriteStream } = require("node:fs");
 const { writeFile, readFile, stat, unlink } = require("node:fs/promises");
+const { Readable } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
 const { pathToFileURL } = require("node:url");
 const { validateServer, validatePath } = require("./policy.cjs");
 const { allowMicrophone } = require("./media-policy.cjs");
@@ -15,9 +18,13 @@ const { validateCanvas } = require("./src/canvas-model.cjs");
 // separate local instances must not inherit another instance's preferences.
 const profile = process.argv.find((argument) => argument.startsWith("--user-data-dir="));
 if (profile) app.setPath("userData", profile.slice("--user-data-dir=".length));
-let window, tray = null, quitting = false;
+let window, tray = null, quitting = false, chosenCapture = null;
 let desktop = normalizeDesktopSettings();
 const entry = pathToFileURL(join(__dirname, "index.html")).href;
+function downloadName(name) {
+  const base = String(name || "file").split(/[/\\]/).pop().replace(/[\u0000-\u001f]/g, "").trim().slice(0, 120);
+  return base && base !== "." && base !== ".." ? base : "file";
+}
 function trusted(event) {
   if (event.sender !== window?.webContents || event.senderFrame?.url !== entry)
     throw new Error("Untrusted caller");
@@ -26,6 +33,8 @@ const primary = !app.isPackaged || app.requestSingleInstanceLock();
 if (!primary) app.quit();
 app.whenReady().then(async () => {
   if (!primary) return;
+  // Electron otherwise installs File, Edit, View, and Window. The hangout has its own controls.
+  Menu.setApplicationMenu(null);
   desktop = await loadDesktopSettings();
   applyLoginItem();
   app.setAppUserModelId("dev.waystone.desktop");
@@ -43,6 +52,18 @@ app.whenReady().then(async () => {
       sandbox: true,
       nodeIntegration: false,
     },
+  });
+  if (process.platform !== "darwin") window.removeMenu();
+  window.webContents.session.setDisplayMediaRequestHandler(async (_request, callback) => {
+    const id = chosenCapture;
+    chosenCapture = null;
+    try {
+      const sources = await desktopCapturer.getSources({ types: ["screen", "window"] });
+      const source = sources.find((item) => item.id === id);
+      callback(source ? { video: source } : {});
+    } catch {
+      callback({});
+    }
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
@@ -71,7 +92,7 @@ app.whenReady().then(async () => {
     "update-status": () => updates.status(), "update-check": () => updates.check(),
     "update-download": () => updates.download(), "update-install": () => updates.install(),
   })) ipcMain.handle(name, (event) => { trusted(event); return action(); });
-  window.webContents.once("did-finish-load", () => updates.check());
+  window.webContents.once("did-finish-load", () => updates.check({ installOnReady: true }));
   const updateTimer = setInterval(() => updates.check(), 6 * 60 * 60 * 1000);
   updateTimer.unref();
   window.once("closed", () => clearInterval(updateTimer));
@@ -136,6 +157,85 @@ app.whenReady().then(async () => {
         : response.json();
     },
   );
+  ipcMain.handle("capture-sources", async (event) => {
+    trusted(event);
+    const sources = await desktopCapturer.getSources({
+      types: ["screen", "window"], thumbnailSize: { width: 320, height: 180 }, fetchWindowIcons: false,
+    });
+    return sources
+      .map((source) => ({
+        id: source.id,
+        name: String(source.name || (source.id.startsWith("screen:") ? "Screen" : "Window")).replace(/[\u0000-\u001f]/g, "").trim().slice(0, 120) || "Window",
+        kind: source.id.startsWith("screen:") ? "screen" : "window",
+        thumbnail: source.thumbnail.isEmpty() ? "" : source.thumbnail.toDataURL(),
+      }))
+      .filter((source) => /^(screen|window):\d+:\d+$/.test(source.id))
+      .sort((a, b) => Number(b.kind === "screen") - Number(a.kind === "screen") || a.name.localeCompare(b.name));
+  });
+  ipcMain.handle("capture-choose", (event, id) => {
+    trusted(event);
+    if (typeof id !== "string" || !/^(screen|window):\d+:\d+$/.test(id)) throw new Error("Choose a window or screen.");
+    chosenCapture = id;
+    return true;
+  });
+  ipcMain.handle("share-file", async (event, { server, token, channelId }) => {
+    trusted(event);
+    const base = validateServer(server);
+    if (typeof token !== "string" || token.length < 1 || token.length > 128 || /[\r\n]/.test(token))
+      throw new Error("Please sign in again.");
+    if (!Number.isInteger(channelId) || channelId < 1) throw new Error("Join a channel before sharing a file.");
+    const picked = await dialog.showOpenDialog(window, { title: "Share a file", properties: ["openFile"] });
+    if (picked.canceled || !picked.filePaths[0]) return null;
+    const filePath = picked.filePaths[0];
+    const info = await stat(filePath);
+    if (!info.isFile()) throw new Error("Choose a file.");
+    if (info.size === 0) throw new Error("Choose a file that isn't empty.");
+    if (info.size > 256 * 1024 * 1024) throw new Error("Files can be up to 256 MB.");
+    const stream = createReadStream(filePath);
+    try {
+      const response = await fetch(`${base}/api/channels/${channelId}/files`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/octet-stream",
+          "X-File-Name": encodeURIComponent(basename(filePath)),
+        },
+        body: Readable.toWeb(stream),
+        duplex: "half",
+        redirect: "error",
+        signal: AbortSignal.timeout(1_800_000),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Could not share that file (${response.status})`);
+      }
+      const file = await response.json();
+      if (!file || typeof file.id !== "string" || typeof file.name !== "string" || !Number.isInteger(file.byte_size))
+        throw new Error("Could not share that file.");
+      return { id: file.id, name: file.name, byte_size: file.byte_size };
+    } finally {
+      stream.destroy();
+    }
+  });
+  ipcMain.handle("save-shared-file", async (event, { server, token, path, name }) => {
+    trusted(event);
+    const base = validateServer(server);
+    validatePath(path);
+    if (!/^\/api\/messages\/\d+\/attachments\/[0-9a-f-]{36}$/.test(path)) throw new Error("Invalid file");
+    if (typeof token !== "string" || token.length < 1 || token.length > 128 || /[\r\n]/.test(token))
+      throw new Error("Please sign in again.");
+    const safe = downloadName(name);
+    const result = await dialog.showSaveDialog(window, { defaultPath: safe });
+    if (result.canceled || !result.filePath) return false;
+    const response = await fetch(base + path, {
+      headers: { Authorization: `Bearer ${token}` },
+      redirect: "error",
+      signal: AbortSignal.timeout(1_800_000),
+    });
+    if (!response.ok) throw new Error("Could not download that file.");
+    await pipeline(Readable.fromWeb(response.body), createWriteStream(result.filePath));
+    return true;
+  });
   ipcMain.handle("copy-context", (event, text) => {
     trusted(event);
     if (typeof text !== "string" || text.length > 20_000_000)

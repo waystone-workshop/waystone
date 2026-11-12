@@ -1,11 +1,12 @@
 import { readAudioPreferences, writeAudioPreferences } from "./audio-quality.mjs";
+import { readVideoPreferences, writeVideoPreferences } from "./video-quality.mjs";
 
 export function matchingSettings(items, query) {
   const needle = query.trim().toLowerCase();
   return items.filter((item) => !needle || `${item.label} ${item.group} ${item.keywords}`.toLowerCase().includes(needle));
 }
 
-export function setupSettings({ document, bridge, report, openProfile, user, avatar, storage }) {
+export function setupSettings({ document, bridge, report, openProfile, user, avatar, storage, onVideoChange }) {
   const $ = (id) => document.getElementById(id);
   const links = [...document.querySelectorAll("[data-settings-page]")];
   const panels = [...document.querySelectorAll("[data-settings-panel]")];
@@ -16,7 +17,7 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
     page = next;
     for (const panel of panels) panel.hidden = panel.dataset.settingsPanel !== next;
     for (const link of links) link.classList.toggle("active", link.dataset.settingsPage === next && !link.hidden);
-    if (next === "audio") loadAudio();
+    if (next === "audio") { loadAudio(); loadVideo(); }
     if (next === "account") renderAccount();
   }
 
@@ -75,6 +76,13 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
     menu.value = [...menu.options].some((option) => option.value === current) ? current : "";
   }
 
+  function loadVideo() {
+    if (!$("video-quality")) return;
+    const video = readVideoPreferences(storage);
+    $("video-quality").value = video.quality;
+    $("video-fps").value = String(video.frameRate);
+  }
+
   function saveAudio(patch) {
     writeAudioPreferences(patch, storage);
   }
@@ -104,6 +112,14 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
   $("audio-echo").addEventListener("change", () => saveAudio({ echoCancellation: $("audio-echo").checked }));
   $("audio-gain").addEventListener("change", () => saveAudio({ autoGainControl: $("audio-gain").checked }));
   $("audio-device").addEventListener("change", () => saveAudio({ deviceId: $("audio-device").value }));
+  $("video-quality")?.addEventListener("change", () => {
+    writeVideoPreferences({ quality: $("video-quality").value }, storage);
+    onVideoChange?.();
+  });
+  $("video-fps")?.addEventListener("change", () => {
+    writeVideoPreferences({ frameRate: Number($("video-fps").value) }, storage);
+    onVideoChange?.();
+  });
   $("close-to-tray").addEventListener("change", () => saveDesktop({ closeToTray: $("close-to-tray").checked }));
   $("open-at-login").addEventListener("change", () => saveDesktop({ openAtLogin: $("open-at-login").checked }));
 

@@ -156,14 +156,24 @@ export async function startBackend() {
         author: "Ada",
         user_id: user.id,
         body: params.body,
-        attachments: params.attachments.map((a, i) => ({
-          id: `image-${messages.length}-${i}`,
-          name: "drawing.png",
-          kind: a.kind,
-          content_type: "image/png",
-          canvas_id: a.canvas_id,
-          canvas_revision: a.canvas_revision,
-        })),
+        attachments: (params.attachments || []).map((a, i) =>
+          a.kind === "file"
+            ? {
+                id: a.file_id,
+                name: "notes.txt",
+                kind: "file",
+                content_type: "application/octet-stream",
+                byte_size: 1280,
+              }
+            : {
+                id: `image-${messages.length}-${i}`,
+                name: "drawing.png",
+                kind: a.kind,
+                content_type: "image/png",
+                canvas_id: a.canvas_id,
+                canvas_revision: a.canvas_revision,
+              },
+        ),
         inserted_at: new Date().toISOString(),
       };
       messages.push(data);

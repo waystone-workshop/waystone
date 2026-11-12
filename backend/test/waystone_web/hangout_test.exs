@@ -88,7 +88,7 @@ defmodule WaystoneWeb.HangoutTest do
     member_conn |> post("/api/voice-rooms/#{voice["id"]}/call") |> json_response(404)
   end
 
-  test "independent voice grants carry account identity and microphone-only permissions", %{
+  test "independent voice grants carry account identity and call media permissions", %{
     conn: conn
   } do
     previous = Application.get_env(:waystone, :voice)
@@ -118,7 +118,7 @@ defmodule WaystoneWeb.HangoutTest do
       |> Jason.decode!()
 
     assert claims["video"]["room"] == "voice-#{room.id}"
-    assert claims["video"]["canPublishSources"] == ["microphone"]
+    assert claims["video"]["canPublishSources"] == ["microphone", "camera", "screen_share"]
     assert Jason.decode!(claims["metadata"]) == %{"user_id" => user.id}
   end
 end

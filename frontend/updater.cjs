@@ -12,8 +12,9 @@ function compareVersions(left, right) {
 
 function createUpdater({ app, updater, platform, publish, confirmInstall, openRelease }) {
   let state = { phase: app.isPackaged ? "idle" : "disabled", current: app.getVersion(),
-    message: app.isPackaged ? "Check for a new version." : "Updates are available in installed builds." };
+    message: app.isPackaged ? "Waystone checks for updates on its own." : "Updates are available in installed builds." };
   let checking = false, downloading = false, pendingVersion = null, settling = false, installing = false, activeCheck = null;
+  let installWhenReady = false;
   const set = (change) => { state = { ...state, ...change }; publish(state); };
   const automatic = platform === "win32";
   // Quit is handled here so a newer release can replace one already downloaded.
@@ -26,7 +27,7 @@ function createUpdater({ app, updater, platform, publish, confirmInstall, openRe
   updater.allowDowngrade = false;
   updater.on("update-available", (info) => set({ phase: automatic ? "downloading" : "available", version: info.version,
     percent: 0, message: automatic ? `Downloading version ${info.version} in the background…` : `Version ${info.version} is available.`, manual: !automatic }));
-  updater.on("update-not-available", () => set({ phase: "current", message: "You're up to date." }));
+  updater.on("update-not-available", () => { installWhenReady = false; set({ phase: "current", message: "You're up to date." }); });
   updater.on("download-progress", (progress) => set({ phase: "downloading",
     percent: Math.max(0, Math.min(100, Math.round(progress.percent))), message: "Downloading update…" }));
   updater.on("update-downloaded", (info) => {
@@ -35,14 +36,20 @@ function createUpdater({ app, updater, platform, publish, confirmInstall, openRe
     pendingVersion = info.version;
     set({ phase: "downloaded", version: info.version,
       message: replaced
-        ? `Version ${info.version} includes the earlier updates. One restart installs it, then Waystone opens again.`
-        : "Update ready. Restart Waystone and it installs in the background, then opens again." });
+        ? `Version ${info.version} includes the earlier updates. Waystone installs it when it opens.`
+        : "Update ready. Waystone installs it the next time it opens." });
+    if (installWhenReady && !installing) {
+      installWhenReady = false;
+      installing = true;
+      updater.quitAndInstall(true, true);
+    }
   });
   updater.on("error", () => set({ phase: "error", message: "Couldn't get the update. Try again later." }));
 
-  async function check() {
+  async function check({ installOnReady = false } = {}) {
     if (!app.isPackaged || state.phase === "available") return state;
     if (activeCheck) return activeCheck;
+    if (installOnReady) installWhenReady = true;
     const ready = state.phase === "downloaded" ? state : null;
     checking = true;
     if (!ready) set({ phase: "checking", message: "Checking for updates…" });
@@ -54,12 +61,22 @@ function createUpdater({ app, updater, platform, publish, confirmInstall, openRe
           try { await result.downloadPromise; }
           finally { downloading = false; }
         }
+        if (installWhenReady && state.phase === "downloaded" && !installing) {
+          installWhenReady = false;
+          installing = true;
+          updater.quitAndInstall(true, true);
+        }
       }
       catch {
+        installWhenReady = false;
         if (ready) set(ready);
-        else set({ phase: "error", message: "Couldn't check for updates. Try again later." });
+        else set({ phase: "error", message: "Couldn't get the update. It will be tried again later." });
       }
-      finally { checking = false; activeCheck = null; }
+      finally {
+        checking = false;
+        activeCheck = null;
+        if (!["downloading", "downloaded"].includes(state.phase)) installWhenReady = false;
+      }
       return state;
     })();
     return activeCheck;
@@ -96,7 +113,7 @@ function createUpdater({ app, updater, platform, publish, confirmInstall, openRe
       downloading = true;
       set({ phase: "downloading", percent: 0, message: "Downloading update…" });
       try { await updater.downloadUpdate(); }
-      catch { set({ phase: "error", message: "Download failed. Check for updates to try again." }); }
+      catch { set({ phase: "error", message: "Download failed. It will be tried again later." }); }
       finally { downloading = false; }
     },
     async install() {

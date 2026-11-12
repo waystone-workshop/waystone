@@ -5,6 +5,7 @@ import { icon, mountIcons } from "./icons.mjs";
 import { Room, RoomEvent, Track } from "livekit-client";
 import { AudioCall } from "./audio.mjs";
 import { voiceCaptureFor, voicePublish, readAudioPreferences } from "./audio-quality.mjs";
+import { readVideoPreferences, videoCaptureFor } from "./video-quality.mjs";
 import { createNoiseProcessor } from "./noise-processor.mjs";
 import { setupUpdates } from "./updates.mjs";
 import { setupProfiles } from "./profiles.mjs";
@@ -12,7 +13,7 @@ import { setupSettings } from "./settings.mjs";
 import { mergeMessages, rangeQuery } from "./context.mjs";
 const $ = (id) => document.getElementById(id);
 mountIcons(document);
-let directory, activeVoiceRoom = null, voiceRooms = [], voiceState = { state: "idle", participants: [] }, lastVoiceState = null;
+let directory, activeVoiceRoom = null, voiceRooms = [], voiceState = { state: "idle", participants: [], camera: false, sharing: false }, lastVoiceState = null, lastCaptureId = null;
 let spaces = [];
 let server,
   currentUser,
@@ -74,6 +75,7 @@ $("members-collapse").onclick = () => setPeopleOpen(false);
 const settings = setupSettings({
   document, bridge: window.waystone, report, openProfile: () => $("profile-open").click(),
   user: () => currentUser, avatar: (person) => profiles.avatar(person),
+  onVideoChange: () => call.applyVideo().catch(report),
 });
 $("settings-open").onclick = () => { settings.open(); $("settings-dialog").showModal(); };
 $("space-open").onclick = () => { $("space-search").value = ""; renderSpaces(); $("space-dialog").showModal(); $("space-search").focus(); };
@@ -100,18 +102,28 @@ $("auth-mode").onchange = () => {
   $("auth-hint").textContent = register ? "Use your invitation code once to join. Passwords need at least 12 characters." : "Sign in with your username and password.";
 };
 const call = new AudioCall({
-  createRoom: () => new Room({
-    audioCaptureDefaults: voiceCaptureFor(readAudioPreferences()),
-    publishDefaults: voicePublish,
-  }),
+  createRoom: () => {
+    const video = videoCaptureFor(readVideoPreferences());
+    return new Room({
+      audioCaptureDefaults: voiceCaptureFor(readAudioPreferences()),
+      videoCaptureDefaults: { resolution: video.resolution },
+      publishDefaults: { ...voicePublish, videoEncoding: video.encoding, screenShareEncoding: video.encoding },
+    });
+  },
   createProcessor: createNoiseProcessor,
   microphoneSource: Track.Source.Microphone,
+  cameraSource: Track.Source.Camera,
+  screenSource: Track.Source.ScreenShare,
+  mediaRoot: $("call-media"),
+  videoStage: $("call-stage"),
+  videoCameras: $("call-cameras"),
+  prepareShare: () => lastCaptureId && window.waystone.chooseCapture?.(lastCaptureId),
   events: RoomEvent,
   credentials: (id) => api(`/voice-rooms/${id}/call`, { method: "POST" }),
   audioHost: $("call-audio"),
   failed: report,
-  changed: ({ state, muted, deafened, participants, playbackBlocked }) => {
-    voiceState = { state, muted, deafened, participants, playbackBlocked };
+  changed: ({ state, muted, deafened, participants, playbackBlocked, camera, sharing }) => {
+    voiceState = { state, muted, deafened, participants, playbackBlocked, camera, sharing };
     const idle = state === "idle";
     $("join-audio").hidden = !idle;
     $("join-audio").disabled = false;
@@ -125,6 +137,14 @@ const call = new AudioCall({
     $("call-mute").title = muted ? "Unmute microphone" : "Mute microphone";
     $("call-mute").setAttribute("aria-pressed", String(muted));
     $("call-mute").disabled = state !== "connected";
+    $("call-camera").disabled = state !== "connected";
+    $("call-camera").setAttribute("aria-pressed", String(Boolean(camera)));
+    $("call-camera").title = camera ? "Turn camera off" : "Turn camera on";
+    $("call-camera").setAttribute("aria-label", camera ? "Turn camera off" : "Turn camera on");
+    $("call-share").disabled = state !== "connected";
+    $("call-share").setAttribute("aria-pressed", String(Boolean(sharing)));
+    $("call-share").title = sharing ? "Stop sharing" : "Share a window or the desk";
+    $("call-share").setAttribute("aria-label", sharing ? "Stop sharing" : "Share a window or the desk");
     $("call-deafen").textContent = deafened ? "Enable sound" : "Deafen";
     $("call-deafen").setAttribute("aria-pressed", String(deafened));
     $("call-resume").hidden = !playbackBlocked;
@@ -179,8 +199,36 @@ function pushVoicePresence() {
   const key = JSON.stringify(meta); if (key === lastVoiceState) return;
   lastVoiceState = key; directory.push("voice_state", meta);
 }
-$("call-leave").onclick = () => call.leave();
+$("call-leave").onclick = () => { lastCaptureId = null; call.leave(); };
 $("call-mute").onclick = () => call.mute();
+$("call-camera").onclick = () => call.camera(!voiceState.camera);
+$("call-share").onclick = () => { if (voiceState.sharing) call.share(false); else openShare().catch(report); };
+async function openShare() {
+  if (voiceState.state !== "connected") return;
+  if (!window.waystone.captureSources) { await call.share(true); return; }
+  const sources = await window.waystone.captureSources();
+  const list = $("share-sources");
+  list.replaceChildren(...sources.map((source) => {
+    const button = el("button", undefined, "share-source");
+    button.type = "button";
+    if (source.thumbnail) {
+      const img = el("img");
+      img.alt = "";
+      img.src = source.thumbnail;
+      button.append(img);
+    }
+    button.append(el("strong", source.kind === "screen" ? "Whole desk" : "Window"), el("span", source.name));
+    button.onclick = async () => {
+      lastCaptureId = source.id;
+      $("share-dialog").close();
+      await window.waystone.chooseCapture(source.id);
+      await call.share(true);
+    };
+    return button;
+  }));
+  if (!sources.length) list.append(el("p", "No windows are available to share.", "subtle"));
+  $("share-dialog").showModal();
+}
 $("call-deafen").onclick = () => call.deafen();
 $("call-resume").onclick = () => call.resume();
 function el(tag, text, className) {
@@ -316,7 +364,17 @@ async function loadChannels() {
   if (!channelId && result.channels.length)
     await switchChannel(result.channels[0]);
 }
+function forgetPending(channel = channelId) {
+  const files = pending.filter((item) => item.kind === "file" && item.file_id);
+  pending = [];
+  renderPending();
+  if (!channel || !token) return;
+  for (const file of files) {
+    api(`/channels/${channel}/files/${file.file_id}`, { method: "DELETE" }).catch(() => {});
+  }
+}
 function resetChannel() {
+  forgetPending();
   subscription?.leave();
   subscription = null;
   generation++;
@@ -324,7 +382,6 @@ function resetChannel() {
   channelName = null;
   channelBoardId = null;
   messages = [];
-  pending = [];
   selected.clear();
   $("body").value = "";
   $("channel-title").textContent = "Choose or create a channel";
@@ -392,6 +449,7 @@ async function switchChannel(channel) {
     )
   )
     return;
+  const leaving = channelId;
   saveDraft();
   subscription?.leave();
   generation++;
@@ -409,7 +467,7 @@ async function switchChannel(channel) {
   $("export-open").disabled = false;
   messages = [];
   selected.clear();
-  pending = [];
+  forgetPending(leaving);
   $("body").value = localStorage.getItem(draftKey()) || "";
   renderPending();
   $("channel-title").textContent = spaceLabel(channel);
@@ -502,6 +560,10 @@ function renderMessages() {
       );
       content.append(meta, el("p", message.body));
       for (const attachment of message.attachments) {
+        if (attachment.kind === "file") {
+          content.append(fileCard(message, attachment));
+          continue;
+        }
         const image = el("img");
         image.alt =
           attachment.kind === "drawing" ? "Shared drawing" : "Shared picture";
@@ -605,6 +667,8 @@ $("composer").onsubmit = async (event) => {
       body: {
         body: text,
         attachments: pending.map((attachment) => {
+          if (attachment.kind === "file")
+            return { kind: "file", file_id: attachment.file_id };
           const object = canvases.get(attachment.canvas_id);
           if (!object) return attachment;
           const dataURL = canvases.preview(object);
@@ -641,9 +705,40 @@ $("body").onkeydown = (event) => {
     $("composer").requestSubmit();
   }
 };
+function formatSize(bytes) {
+  const units = ["B", "KB", "MB", "GB"];
+  let size = Number(bytes) || 0, unit = 0;
+  while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+  const rounded = unit === 0 ? String(Math.round(size)) : size.toFixed(size >= 10 ? 0 : 1);
+  return `${rounded} ${units[unit]}`;
+}
+function fileCard(message, attachment) {
+  const button = el("button", undefined, "shared-file");
+  button.type = "button";
+  button.title = `Save ${attachment.name}`;
+  button.append(el("span", attachment.name), el("span", formatSize(attachment.byte_size), "file-size"));
+  button.onclick = () => saveSharedFile(message, attachment).catch(report);
+  return button;
+}
+async function saveSharedFile(message, attachment) {
+  const path = `/api/messages/${message.id}/attachments/${attachment.id}`;
+  if (window.waystone.saveSharedFile) {
+    const saved = await window.waystone.saveSharedFile({ server, token, path, name: attachment.name });
+    if (saved) notify(`Saved ${attachment.name}`);
+    return;
+  }
+  const bytes = await api(path.slice(4), { binary: true });
+  const url = URL.createObjectURL(new Blob([bytes]));
+  const link = el("a");
+  link.href = url;
+  link.download = attachment.name || "file";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 function renderPending() {
   $("pending").replaceChildren(
     ...pending.map((attachment, index) => {
+      if (attachment.kind === "file") return pendingFile(attachment, index);
       const wrapper = el("div", undefined, "pending-image");
       const image = el("img");
       const object = canvases.get(attachment.canvas_id);
@@ -667,6 +762,63 @@ function renderPending() {
       return wrapper;
     }),
   );
+}
+function pendingFile(attachment, index) {
+  const wrapper = el("div", undefined, "pending-file");
+  wrapper.append(el("span", attachment.name), el("span", formatSize(attachment.byte_size), "file-size"));
+  const remove = el("button", "×");
+  remove.type = "button";
+  remove.setAttribute("aria-label", `Remove ${attachment.name}`);
+  remove.onclick = () => {
+    if (sending) return;
+    pending.splice(index, 1);
+    renderPending();
+    api(`/channels/${channelId}/files/${attachment.file_id}`, { method: "DELETE" }).catch(() => {});
+  };
+  wrapper.append(remove);
+  return wrapper;
+}
+async function shareFromDesktop() {
+  if (sending || !channelId) return report(new Error("Join a channel before sharing a file."));
+  if (pending.length >= 4) return report(new Error("Attach at most four files or images per message."));
+  const version = generation;
+  const channel = channelId;
+  const status = $("draft-status");
+  status.textContent = "Sharing a file…";
+  try {
+    const file = await window.waystone.shareFile({ server, token, channelId: channel });
+    if (!file) return;
+    if (version !== generation || channelId !== channel || pending.length >= 4) {
+      api(`/channels/${channel}/files/${file.id}`, { method: "DELETE" }).catch(() => {});
+      return;
+    }
+    pending.push({ kind: "file", file_id: file.id, name: file.name, byte_size: file.byte_size });
+    renderPending();
+  } catch (error) {
+    report(error);
+  } finally {
+    if (status.textContent === "Sharing a file…") status.textContent = "";
+  }
+}
+async function shareFromBrowser(file) {
+  if (sending || !channelId) throw new Error("Join a channel before sharing a file.");
+  if (!file.size) throw new Error("Choose a file that isn't empty.");
+  if (file.size > 256 * 1024 * 1024) throw new Error("Files can be up to 256 MB.");
+  const response = await fetch(`${server}/api/channels/${channelId}/files`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+      "X-File-Name": encodeURIComponent(file.name),
+    },
+    body: file,
+    signal: AbortSignal.timeout(1_800_000),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || `Could not share that file (${response.status})`);
+  }
+  return response.json();
 }
 async function attachCanvas(object, dataURL) {
   if (sending || !channelId)
@@ -705,6 +857,33 @@ const canvases = setupCanvases({
   },
 });
 $("picture").onclick = () => $("files").click();
+$("share-file").onclick = () => {
+  if (window.waystone.shareFile) shareFromDesktop();
+  else $("share-file-input").click();
+};
+$("share-file-input").onchange = async () => {
+  const [file] = $("share-file-input").files || [];
+  $("share-file-input").value = "";
+  if (!file) return;
+  const version = generation;
+  const channel = channelId;
+  const status = $("draft-status");
+  status.textContent = "Sharing a file…";
+  try {
+    if (pending.length >= 4) throw new Error("Attach at most four files or images per message.");
+    const uploaded = await shareFromBrowser(file);
+    if (version !== generation || channelId !== channel || pending.length >= 4) {
+      api(`/channels/${channel}/files/${uploaded.id}`, { method: "DELETE" }).catch(() => {});
+      return;
+    }
+    pending.push({ kind: "file", file_id: uploaded.id, name: uploaded.name, byte_size: uploaded.byte_size });
+    renderPending();
+  } catch (error) {
+    report(error);
+  } finally {
+    if (status.textContent === "Sharing a file…") status.textContent = "";
+  }
+};
 $("files").onchange = async () => {
   const version = generation;
   try {
@@ -816,6 +995,7 @@ async function signOut(revoke = true) {
   }
   call.leave();
   saveDraft();
+  forgetPending();
   socket?.disconnect();
   token = null;
   await window.waystone.clearSession?.().catch(() => {});

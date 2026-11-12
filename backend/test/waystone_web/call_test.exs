@@ -24,7 +24,7 @@ defmodule WaystoneWeb.CallTest do
     assert conn |> post("/api/channels/#{channel.id}/call") |> json_response(401)
   end
 
-  test "token is signed, short lived and limited to the channel microphone", %{
+  test "token is signed, short lived and limited to this room's media", %{
     conn: conn,
     channel: channel
   } do
@@ -47,7 +47,7 @@ defmodule WaystoneWeb.CallTest do
              "roomJoin" => true,
              "canPublish" => true,
              "canSubscribe" => true,
-             "canPublishSources" => ["microphone"],
+             "canPublishSources" => ["microphone", "camera", "screen_share"],
              "canPublishData" => false
            }
   end

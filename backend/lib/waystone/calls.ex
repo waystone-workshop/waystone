@@ -1,5 +1,5 @@
 defmodule Waystone.Calls do
-  @moduledoc "Short-lived, microphone-only access to the channel's LiveKit room."
+  @moduledoc "Short-lived access to a LiveKit room for microphone, camera, and screen share."
 
   def join(channel_id, name) do
     grant("channel-#{channel_id}", name, nil)
@@ -27,7 +27,7 @@ defmodule Waystone.Calls do
           roomJoin: true,
           canSubscribe: true,
           canPublish: true,
-          canPublishSources: ["microphone"],
+          canPublishSources: ["microphone", "camera", "screen_share"],
           canPublishData: false
         }
       }

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { matchingSettings, setupSettings } from "../src/settings.mjs";
 import { readAudioPreferences } from "../src/audio-quality.mjs";
+import { readVideoPreferences } from "../src/video-quality.mjs";
 
 test("search matches a section label, group, or keyword", () => {
   const items = [
@@ -31,6 +32,8 @@ test("settings pages, search, and switches stay on the choices the listener made
       <section data-settings-panel="security" hidden></section>
       <section data-settings-panel="audio" hidden>
         <select id="audio-noise"><option value="automatic">Automatic</option><option value="off">Off</option></select><input id="audio-echo" type="checkbox" /><input id="audio-gain" type="checkbox" /><select id="audio-device"></select>
+        <select id="video-quality"><option value="720">720</option><option value="1080">1080</option><option value="hq">HQ</option></select>
+        <select id="video-fps"><option value="15">15</option><option value="30">30</option><option value="60">60</option></select>
       </section>
       <section data-settings-panel="system" hidden>
         <input id="close-to-tray" type="checkbox" /><input id="open-at-login" type="checkbox" /><p id="startup-note" hidden></p>
@@ -65,6 +68,11 @@ test("settings pages, search, and switches stay on the choices the listener made
   document.getElementById("audio-noise").value = "off";
   document.getElementById("audio-noise").dispatchEvent(new dom.window.Event("change"));
   assert.equal(readAudioPreferences(storage).noiseSuppression, false);
+  document.getElementById("video-quality").value = "hq";
+  document.getElementById("video-quality").dispatchEvent(new dom.window.Event("change"));
+  document.getElementById("video-fps").value = "60";
+  document.getElementById("video-fps").dispatchEvent(new dom.window.Event("change"));
+  assert.deepEqual(readVideoPreferences(storage), { quality: "hq", frameRate: 60 });
   document.getElementById("settings-search").value = "tray";
   document.getElementById("settings-search").dispatchEvent(new dom.window.Event("input"));
   assert.equal(document.querySelector('[data-settings-page="system"]').hidden, false);
