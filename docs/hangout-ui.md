@@ -55,12 +55,33 @@ versions/content types rather than image bytes. The renderer loads images throug
 the authenticated desktop bridge into local blob URLs, and releases them on
 sign-out. Missing/undecodable images fall back to initials/a plain banner.
 
+## Messages, replies, emoji, and stickers
+
+A message can be edited by its author. The text changes; pictures and files stay.
+The room shows a small “edited” mark. The author can delete their own message.
+A moderator or admin can delete anyone’s. Deleting removes it, and a reply that
+pointed at it keeps the rest of the message without the quote.
+
+Reply quotes the earlier message above the new one. It is not a thread. The
+composer shows who you are answering, and that clears when the message sends,
+the channel changes, or the quoted message is deleted.
+
+Emoji and stickers are pictures the room uploads. Emoji appear in a message as
+`:name:`. Stickers send as their own picture. The name is 2–32 letters, numbers,
+or underscores. The person who added one, or a moderator, can remove it. The
+picture stays on disk beside the database, and a message keeps only the name.
+
+Who may upload, how large a picture can be, and how many the shelf holds are
+server settings. An admin changes them under Settings → Expressions. They are
+stored with the room, not in anyone’s device preferences. Voice, picture
+quality, and the tray stay on the device.
+
 ## Still outside this pass
 
 - Global message search, unread counters, and persistent read markers.
 - Custom activity/status text and automatic away/idle detection.
 - Sharing a board as a first-class message attachment with a generated preview.
-- Emoji reactions and an emoji picker.
+- Emoji reactions on a message.
 - Avatar/banner crop-position controls.
 - Dedicated audio-device selection and volume controls per participant.
 

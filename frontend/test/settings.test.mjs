@@ -26,6 +26,8 @@ test("settings pages, search, and switches stay on the choices the listener made
       <button class="settings-link" data-settings-page="security" data-settings-group="user" data-settings-keywords="password">Password &amp; security</button>
       <p data-settings-group="audio">Audio settings</p>
       <button class="settings-link" data-settings-page="audio" data-settings-group="audio" data-settings-keywords="voice microphone">Voice</button>
+      <p data-settings-group="server">Server settings</p>
+      <button class="settings-link" data-settings-page="server" data-settings-group="server" data-settings-role="admin" data-settings-keywords="emoji sticker">Expressions</button>
       <p data-settings-group="system">System</p>
       <button class="settings-link" data-settings-page="system" data-settings-group="system" data-settings-keywords="close tray startup">System</button>
       <section data-settings-panel="account"></section>
@@ -45,9 +47,10 @@ test("settings pages, search, and switches stay on the choices the listener made
   const values = new Map();
   const storage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
   let saved;
+  let role = "admin";
   const settings = setupSettings({
     document, storage, report() {}, openProfile() {},
-    user: () => ({ display_name: "Ada", username: "ada", role: "admin" }),
+    user: () => ({ display_name: "Ada", username: "ada", role }),
     avatar: () => document.createElement("span"),
     bridge: {
       desktopSettings: async () => ({ closeToTray: true, openAtLogin: false, packaged: true }),
@@ -82,4 +85,12 @@ test("settings pages, search, and switches stay on the choices the listener made
   document.getElementById("close-to-tray").dispatchEvent(new dom.window.Event("change"));
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(saved, { closeToTray: false });
+  document.getElementById("settings-search").value = "";
+  document.getElementById("settings-search").dispatchEvent(new dom.window.Event("input"));
+  assert.equal(document.querySelector('[data-settings-page="server"]').hidden, false);
+  role = "member";
+  settings.refresh();
+  assert.equal(document.querySelector('[data-settings-page="server"]').hidden, true);
+  assert.equal(document.querySelector('p[data-settings-group="server"]').hidden, true);
+  assert.equal(document.querySelector('[data-settings-page="account"]').hidden, false);
 });

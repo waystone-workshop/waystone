@@ -10,9 +10,12 @@ defmodule Waystone.Chat.Export do
         author = m.author |> String.replace(~r/[\r\n]/u, " ")
 
         images =
-          Enum.map_join(m.attachments, "\n", fn
+          Enum.map_join(m.attachments || [], "\n", fn
             %{"kind" => "file", "name" => name, "byte_size" => size} ->
               "#{name} · #{size} bytes. Download it from the channel; it is not included in this export."
+
+            %{"kind" => "sticker", "name" => name} ->
+              ":#{name}: sticker. It stays on the sticker shelf and is not included in this export."
 
             a ->
               reference =
@@ -23,15 +26,23 @@ defmodule Waystone.Chat.Export do
               "![#{a["kind"]}](attachments/#{a["name"]})" <> reference
           end)
 
-        "## Message #{m.id} · #{author} · #{DateTime.to_iso8601(m.inserted_at)}\n\n#{m.body || ""}\n\n#{images}\n"
+        reply =
+          case Map.get(m, :reply_to_id) do
+            nil -> ""
+            id -> "In reply to message #{id}.\n\n"
+          end
+
+        edited = if Map.get(m, :edited_at), do: " · edited", else: ""
+
+        "## Message #{m.id} · #{author} · #{DateTime.to_iso8601(m.inserted_at)}#{edited}\n\n#{reply}#{m.body || ""}\n\n#{images}\n"
       end)
   end
 
   def bundle(channel, messages) do
     files =
       Enum.flat_map(messages, fn m ->
-        Enum.flat_map(m.attachments, fn
-          %{"kind" => "file"} ->
+        Enum.flat_map(m.attachments || [], fn
+          %{"kind" => kind} when kind in ["file", "sticker"] ->
             []
 
           a ->

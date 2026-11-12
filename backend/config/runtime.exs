@@ -63,6 +63,9 @@ if config_env() == :prod do
 
   config :waystone, Waystone.Chat.Files, root: Path.join(Path.dirname(database_path), "files")
 
+  config :waystone, Waystone.Chat.Expressions,
+    root: Path.join(Path.dirname(database_path), "expressions")
+
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
   # want to use a different value for prod and you most likely don't want

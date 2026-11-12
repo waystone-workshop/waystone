@@ -72,9 +72,7 @@ defmodule WaystoneWeb.ApiController do
         _ -> nil
       end
 
-    json(conn, %{
-      messages: Enum.map(Chat.recent_messages(channel.id, before_id), &Chat.message_json/1)
-    })
+    json(conn, %{messages: Chat.present(Chat.recent_messages(channel.id, before_id))})
   end
 
   def send_message(conn, %{"id" => id} = params) do
@@ -82,7 +80,7 @@ defmodule WaystoneWeb.ApiController do
 
     case Chat.send_message(channel.id, conn.assigns.current_user, params) do
       {:ok, message} ->
-        conn |> put_status(201) |> json(Chat.message_json(message))
+        conn |> put_status(201) |> json(Chat.present_message(message))
 
       {:error, error} ->
         reason =
@@ -91,6 +89,98 @@ defmodule WaystoneWeb.ApiController do
             else: "Write a message (up to 2,000 characters) or attach an image or file."
 
         conn |> put_status(422) |> json(%{error: reason})
+    end
+  end
+
+  def update_message(conn, %{"id" => id} = params) do
+    case Chat.edit_message(conn.assigns.current_user, id, params) do
+      {:ok, message} ->
+        json(conn, Chat.present_message(message))
+
+      {:error, :not_found} ->
+        send_resp(conn, 404, "Not found")
+
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: "You can edit your own messages."})
+
+      {:error, error} ->
+        reason =
+          if is_binary(error),
+            do: error,
+            else: "Write a message (up to 2,000 characters) or keep an attachment."
+
+        conn |> put_status(422) |> json(%{error: reason})
+    end
+  end
+
+  def delete_message(conn, %{"id" => id}) do
+    case Chat.delete_message(conn.assigns.current_user, id) do
+      :ok ->
+        json(conn, %{ok: true})
+
+      {:error, :not_found} ->
+        send_resp(conn, 404, "Not found")
+
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: "You can delete your own messages."})
+    end
+  end
+
+  def server(conn, _params),
+    do: json(conn, Waystone.ServerSettings.public(Waystone.ServerSettings.get!()))
+
+  def update_server(conn, params) do
+    if conn.assigns.current_user.role == "admin" do
+      case Waystone.ServerSettings.update(params) do
+        {:ok, settings} ->
+          json(conn, Waystone.ServerSettings.public(settings))
+
+        {:error, changeset} ->
+          conn
+          |> put_status(422)
+          |> json(%{error: Waystone.ServerSettings.error_message(changeset)})
+      end
+    else
+      conn |> put_status(403) |> json(%{error: "Only an admin can change the server."})
+    end
+  end
+
+  def expressions(conn, _params), do: json(conn, Waystone.Chat.Expressions.list())
+
+  def create_expression(conn, params) do
+    case Waystone.Chat.Expressions.create(conn.assigns.current_user, params) do
+      {:ok, expression} ->
+        conn |> put_status(201) |> json(Waystone.Chat.Expressions.public(expression))
+
+      {:error, reason} when is_binary(reason) ->
+        conn |> put_status(422) |> json(%{error: reason})
+    end
+  end
+
+  def delete_expression(conn, %{"id" => id}) do
+    case Waystone.Chat.Expressions.delete(conn.assigns.current_user, id) do
+      :ok ->
+        json(conn, %{ok: true})
+
+      {:error, :not_found} ->
+        send_resp(conn, 404, "Not found")
+
+      {:error, :forbidden} ->
+        conn |> put_status(403) |> json(%{error: "You can remove your own emoji and stickers."})
+    end
+  end
+
+  def expression(conn, %{"id" => id}) do
+    case Waystone.Chat.Expressions.read(id) do
+      {:ok, expression, path} ->
+        conn
+        |> put_resp_header("content-type", expression.content_type)
+        |> put_resp_header("x-content-type-options", "nosniff")
+        |> put_resp_header("cache-control", "private, max-age=86400")
+        |> send_file(200, path)
+
+      :error ->
+        send_resp(conn, 404, "Not found")
     end
   end
 
@@ -124,6 +214,9 @@ defmodule WaystoneWeb.ApiController do
 
       %{"kind" => "file", "id" => id, "name" => name} ->
         send_shared_file(conn, message, id, name)
+
+      %{"kind" => "sticker"} ->
+        send_resp(conn, 404, "Not found")
 
       a ->
         conn

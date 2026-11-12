@@ -21,6 +21,11 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
     if (next === "account") renderAccount();
   }
 
+  function permitted(link) {
+    const required = link.dataset.settingsRole;
+    return !required || user()?.role === required;
+  }
+
   function filter() {
     const query = $("settings-search").value;
     const visible = new Set(matchingSettings(links.map((link) => ({
@@ -29,7 +34,7 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
       group: link.dataset.settingsGroup,
       keywords: link.dataset.settingsKeywords || "",
     })), query).map((item) => item.id));
-    for (const link of links) link.hidden = !visible.has(link.dataset.settingsPage);
+    for (const link of links) link.hidden = !visible.has(link.dataset.settingsPage) || !permitted(link);
     for (const group of groups) {
       group.hidden = !links.some((link) => link.dataset.settingsGroup === group.dataset.settingsGroup && !link.hidden);
     }
@@ -130,6 +135,9 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
       show("account");
       renderAccount();
       loadDesktop().catch(report);
+    },
+    refresh() {
+      filter();
     },
   };
 }

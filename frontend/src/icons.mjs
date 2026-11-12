@@ -12,6 +12,9 @@ const paths = {
   attach: '<path d="m21 11-9 9a6 6 0 0 1-8-8L14 2a4 4 0 0 1 6 6L9 19a2 2 0 0 1-3-3L16 6"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
   pen: '<path d="m16 3 5 5M3 21l5-1L21 7a2 2 0 0 0-5-5L3 15z"/>',
+  reply: '<path d="M9 14 4 9l5-5"/><path d="M4 9h9a6 6 0 0 1 6 6v5"/>',
+  trash: '<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
+  smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
   send: '<path d="m22 2-7 20-4-9L2 9zM22 2 11 13"/>', signal: '<path d="M4 20v-4M9 20v-8M14 20V8M19 20V4"/>',
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>', settings: '<path d="m12 3 2 3 4-.5.5 4 3 2-3 2-.5 4-4-.5-2 3-2-3-4 .5-.5-4-3-2 3-2 .5-4 4 .5z"/><circle cx="12" cy="12" r="3"/>',
 };

@@ -193,9 +193,46 @@ test("camera and screen share publish at the saved picture settings and a share 
     assert.equal(f.snapshot.camera, false);
     assert.equal(f.snapshot.sharing, false);
     assert.equal(children.length, 0);
+    assert.equal(f.call.mediaRoot.hidden, true);
   } finally {
     globalThis.localStorage = previous;
   }
+});
+
+test("leaving and turning the camera off take the picture down", async () => {
+  const f = fixture();
+  const video = {
+    paused: false,
+    srcObject: { active: true },
+    pause() { this.paused = true; },
+    remove() { this.removed = true; },
+    closest() { return this; },
+  };
+  const track = { kind: "video", detach: () => [video], stop() { this.stopped = true; }, mediaStreamTrack: { stop() {} } };
+  f.room.localParticipant.videoTrackPublications = new Map([["camera", { track }]]);
+  f.room.localParticipant.getTrackPublication = () => ({ track });
+  let unpublished = false;
+  f.room.localParticipant.unpublishTrack = async () => { unpublished = true; };
+  f.call.cameraSource = "camera";
+  f.call.mediaRoot = { hidden: false, querySelectorAll: () => [video] };
+  f.call.videoStage = { replaceChildren() {}, childElementCount: 0 };
+  f.call.videoCameras = { replaceChildren() {}, childElementCount: 0 };
+  await f.call.join(1);
+  await f.call.camera(false);
+  assert.equal(unpublished, true);
+  assert.equal(video.paused, true);
+  assert.equal(video.srcObject, null);
+  assert.equal(video.removed, true);
+  assert.equal(f.call.mediaRoot.hidden, true);
+  video.removed = false;
+  video.paused = false;
+  video.srcObject = { active: true };
+  f.call.mediaRoot.hidden = false;
+  f.call.leave();
+  assert.equal(video.srcObject, null);
+  assert.equal(f.call.mediaRoot.hidden, true);
+  assert.equal(f.snapshot.state, "idle");
+  assert.equal(f.snapshot.camera, false);
 });
 
 test("platform voice isolation is not stacked with the noise model", async () => {
