@@ -1,6 +1,6 @@
 {
   "name": "waystone-desktop",
-  "version": "0.6.8",
+  "version": "0.6.9",
   "private": true,
   "repository": {
     "type": "git",
@@ -52,6 +52,7 @@
       "dist/**",
       "policy.cjs",
       "media-policy.cjs",
+      "display-media.cjs",
       "canvas-store.cjs",
       "src/canvas-model.cjs",
       "src/board-model.cjs",
