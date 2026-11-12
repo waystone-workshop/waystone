@@ -218,11 +218,15 @@ async function openShare() {
       button.append(img);
     }
     button.append(el("strong", source.kind === "screen" ? "Whole desk" : "Window"), el("span", source.name));
-    button.onclick = async () => {
-      lastCaptureId = source.id;
-      $("share-dialog").close();
-      await window.waystone.chooseCapture(source.id);
-      await call.share(true);
+    // getDisplayMedia only succeeds during this click. An await before it
+    // drops the gesture and Chromium answers "Permission denied".
+    button.onclick = () => {
+      try {
+        lastCaptureId = source.id;
+        $("share-dialog").close();
+        window.waystone.chooseCapture({ id: source.id, name: source.name });
+        call.share(true).catch(report);
+      } catch (error) { report(error); }
     };
     return button;
   }));

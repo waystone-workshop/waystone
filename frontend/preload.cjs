@@ -21,7 +21,11 @@ contextBridge.exposeInMainWorld("waystone", {
   shareFile: (payload) => ipcRenderer.invoke("share-file", payload),
   saveSharedFile: (payload) => ipcRenderer.invoke("save-shared-file", payload),
   captureSources: () => ipcRenderer.invoke("capture-sources"),
-  chooseCapture: (id) => ipcRenderer.invoke("capture-choose", id),
+  chooseCapture: (source) => {
+    const result = ipcRenderer.sendSync("capture-choose", source);
+    if (result && result.error) throw new Error(result.error);
+    return result;
+  },
   copyContext: (text) => ipcRenderer.invoke("copy-context", text),
   saveExport: (options) => ipcRenderer.invoke("save-export", options),
   loadSession: () => ipcRenderer.invoke("session-load"),
