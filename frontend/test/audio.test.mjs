@@ -159,6 +159,37 @@ function microphone(track) {
   return f;
 }
 
+test("a camera stays with the faces until someone clicks it", async () => {
+  const dom = new JSDOM(`<section id="call-media"><div id="call-stage"></div><div id="call-cameras"></div></section>`);
+  const document = dom.window.document;
+  const f = fixture();
+  f.call.mediaRoot = document.getElementById("call-media");
+  f.call.videoStage = document.getElementById("call-stage");
+  f.call.videoCameras = document.getElementById("call-cameras");
+  f.call.screenSource = "screen_share";
+  const track = () => {
+    let video;
+    return {
+      kind: "video",
+      attach() { video = document.createElement("video"); return video; },
+      detach() { return video ? [video] : []; },
+      stop() {},
+      mediaStreamTrack: { stop() {} },
+    };
+  };
+  await f.call.join(1);
+  const camera = track();
+  f.room.emit("TrackSubscribed", camera, { source: "camera" }, { name: "Mina" });
+  assert.equal(document.querySelector("#call-stage").childElementCount, 0);
+  assert.equal(document.querySelector("#call-cameras span").textContent, "Mina");
+  assert.equal(f.call.mediaRoot.hidden, false);
+  document.querySelector("#call-cameras .call-focus").click();
+  assert.equal(document.querySelector("#call-stage span").textContent, "Mina");
+  f.call.unmount(camera);
+  assert.equal(document.querySelector("#call-stage").childElementCount, 0);
+  assert.equal(f.call.mediaRoot.hidden, true);
+});
+
 test("clicking a picture gives it the spotlight and a share starts there", async () => {
   const dom = new JSDOM(`<section id="call-media"><div id="call-stage"></div><div id="call-cameras"></div></section>`);
   const document = dom.window.document;

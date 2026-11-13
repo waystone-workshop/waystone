@@ -179,7 +179,7 @@ export class AudioCall {
   placeTile(tile, sharing) {
     const current = this.videoStage.firstElementChild;
     const currentIsShare = current?.dataset.share === "1";
-    const takeStage = !current || (!this.spotlightPinned && sharing && !currentIsShare);
+    const takeStage = sharing && (!current || (!this.spotlightPinned && !currentIsShare));
     if (takeStage && current) this.videoCameras.append(current);
     (takeStage ? this.videoStage : this.videoCameras).append(tile);
     this.markSpotlight();
@@ -209,7 +209,7 @@ export class AudioCall {
     if (this.videoStage?.firstElementChild) return;
     this.spotlightPinned = false;
     const waiting = [...(this.videoCameras?.children || [])];
-    const next = waiting.find((tile) => tile.dataset?.share === "1") || waiting[0];
+    const next = waiting.find((tile) => tile.dataset?.share === "1");
     if (next) this.videoStage.append(next);
     this.markSpotlight();
   }

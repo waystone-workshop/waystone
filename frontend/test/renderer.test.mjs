@@ -131,8 +131,8 @@ test("renderer sends text, pictures and drawings, exports a range, and restores 
     );
     assert.equal($("video-quality").value, "1080");
     assert.equal($("video-fps").value, "30");
-    assert.equal($("call-camera").getAttribute("data-icon"), "video");
-    assert.equal($("call-share").getAttribute("data-icon"), "screen");
+    assert.equal($("call-camera").querySelector("[data-icon]").dataset.icon, "video");
+    assert.equal($("call-share").querySelector("[data-icon]").dataset.icon, "screen");
     assert.equal($("expressions").getAttribute("data-icon"), "smile");
     assert.equal($("picture").getAttribute("data-icon"), "image");
     assert.equal($("share-file").getAttribute("data-icon"), "upload");
