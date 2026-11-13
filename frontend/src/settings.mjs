@@ -1,4 +1,5 @@
-import { readAudioPreferences, writeAudioPreferences } from "./audio-quality.mjs";
+import { createNoiseProcessor } from "./noise-processor.mjs";
+import { voiceCaptureFor, readAudioPreferences, writeAudioPreferences } from "./audio-quality.mjs";
 import { readVideoPreferences, writeVideoPreferences } from "./video-quality.mjs";
 import { readSoundPreferences, writeSoundPreferences } from "./sounds.mjs";
 
@@ -7,7 +8,7 @@ export function matchingSettings(items, query) {
   return items.filter((item) => !needle || `${item.label} ${item.group} ${item.keywords}`.toLowerCase().includes(needle));
 }
 
-export function setupSettings({ document, bridge, report, openProfile, user, avatar, storage, onVideoChange, permit, onExpressions }) {
+export function setupSettings({ document, bridge, report, openProfile, user, avatar, storage, onVideoChange, onAudioChange, permit, onExpressions }) {
   const $ = (id) => document.getElementById(id);
   const links = [...document.querySelectorAll("[data-settings-page]")];
   const panels = [...document.querySelectorAll("[data-settings-panel]")];
@@ -15,6 +16,7 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
   let page = "account";
 
   function show(next) {
+    if (next !== "audio") stopMicTest();
     page = next;
     for (const panel of panels) panel.hidden = panel.dataset.settingsPanel !== next;
     for (const link of links) link.classList.toggle("active", link.dataset.settingsPage === next && !link.hidden);
@@ -64,6 +66,7 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
     $("audio-noise").value = preferences.noiseSuppression ? "automatic" : "off";
     $("audio-echo").checked = preferences.echoCancellation;
     $("audio-gain").checked = preferences.autoGainControl;
+    renderSensitivity(preferences);
     return refreshMicrophones(preferences.deviceId);
   }
 
@@ -92,9 +95,72 @@ export function setupSettings({ document, bridge, report, openProfile, user, ava
     $("video-fps").value = String(video.frameRate);
   }
 
-  function saveAudio(patch) {
-    writeAudioPreferences(patch, storage);
+  function renderSensitivity(preferences) {
+    if (!$('audio-input-mode')) return;
+    $('audio-input-mode').value = preferences.inputMode;
+    $('audio-threshold').value = preferences.inputThreshold;
+    $('audio-threshold-value').textContent = preferences.inputThreshold + ' dB';
+    $('audio-threshold-row').hidden = preferences.inputMode !== 'manual';
   }
+  function saveAudio(patch) {
+    const preferences = writeAudioPreferences(patch, storage);
+    renderSensitivity(preferences);
+    if (micProcessor && Object.keys(patch).every(key => ['inputMode', 'inputThreshold'].includes(key))) micProcessor.configure(preferences);
+    else if (micStream || micStarting) stopMicTest();
+    Promise.resolve(onAudioChange?.(patch)).catch(report);
+  }
+  let micVersion = 0, micStream, micProcessor, micStarting = false;
+  function stopMicTest() {
+    micVersion++; micStarting = false;
+    micStream?.getTracks().forEach(track => track.stop()); micStream = undefined;
+    const old = micProcessor; micProcessor = undefined;
+    old?.destroy().catch(report);
+    if ($('audio-test')) {
+      $('audio-test').textContent = 'Test microphone'; $('audio-level').value = -70;
+      $('audio-test-state').textContent = 'Microphone test is off'; $('audio-test-level').textContent = '';
+    }
+  }
+  async function startMicTest() {
+    if (micStream || micStarting) { stopMicTest(); return; }
+    const current = ++micVersion;
+    micStarting = true; $('audio-test').textContent = 'Stop test';
+    $('audio-test-state').textContent = 'Waiting for microphone…';
+    let stream, processor;
+    try {
+      const preferences = readAudioPreferences(storage);
+      stream = await document.defaultView.navigator.mediaDevices.getUserMedia({ audio: voiceCaptureFor(preferences), video: false });
+      if (current !== micVersion) { stream.getTracks().forEach(track => track.stop()); return; }
+      const track = stream.getAudioTracks()[0];
+      const denoise = preferences.noiseSuppression && !track.getSettings().voiceIsolation;
+      if (denoise) await track.applyConstraints({ noiseSuppression: false });
+      processor = createNoiseProcessor({ ...preferences, noiseSuppression: denoise }, state => {
+        if (current !== micVersion) return;
+        $('audio-level').value = Math.max(-70, state.db);
+        const label = state.open ? 'Voice detected · mic open' : 'Below threshold · mic quiet';
+        if ($('audio-test-state').textContent !== label) $('audio-test-state').textContent = label;
+        $('audio-test-level').textContent = Math.round(state.db) + ' dB · opens at ' + Math.round(state.threshold) + ' dB';
+      });
+      await processor.init({ track });
+      if (current !== micVersion) { stream.getTracks().forEach(track => track.stop()); await processor.destroy(); return; }
+      micStream = stream; micProcessor = processor; micStarting = false;
+    } catch (error) {
+      stream?.getTracks().forEach(track => track.stop());
+      await processor?.destroy();
+      if (current !== micVersion) return;
+      stopMicTest(); $('audio-test-state').textContent = 'Could not test microphone. Check input and permission.';
+      report(error);
+    }
+  }
+  $('audio-test')?.addEventListener('click', startMicTest);
+  $('audio-input-mode')?.addEventListener('change', () => saveAudio({ inputMode: $('audio-input-mode').value }));
+  $('audio-threshold')?.addEventListener('input', () => {
+    $('audio-threshold-value').textContent = $('audio-threshold').value + ' dB';
+    micProcessor?.configure({ inputThreshold: Number($('audio-threshold').value) });
+  });
+  $('audio-threshold')?.addEventListener('change', () => saveAudio({ inputThreshold: Number($('audio-threshold').value) }));
+  $('settings-dialog').addEventListener('close', stopMicTest);
+  document.defaultView.addEventListener('pagehide', stopMicTest);
+
 
   function loadSounds() {
     const input = $("sound-notifications");

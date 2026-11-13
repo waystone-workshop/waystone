@@ -174,6 +174,22 @@ image bytes and inclusive message ranges. Client tests cover range selection,
 catch-up deduplication, and the request bridge's URL restrictions.
 
 The renderer integration test runs against an isolated test HTTP/WebSocket backend.
+`npm run test:lobby` checks call controls, shared-screen space, and composer
+layout at large, medium, minimum desktop, and narrow window sizes. It uses
+simulated media with the isolated test backend and saves previews in
+`tmp/lobby-review/`; it does not verify a live call or request camera access.
+
+`npm run test:chat-audio` verifies reply/edit/reaction menus, emoji search and
+caret insertion, sticker sending, and the real RNNoise/voice-gate worklets in
+Electron using a synthetic microphone. It checks that leaving the test releases
+the microphone; it does not measure perceived quality in a real call. Previews
+are saved in `tmp/chat-audio-review/`.
+
+Voice settings now include automatic input sensitivity, a manual threshold, and
+a local microphone meter. Sensitivity gates quiet audio between phrases; noise
+reduction handles background sound during speech. Settings changes apply during
+a call, and processing failures show a browser-audio fallback status.
+
 `npm run test:e2e` opens the real Electron app against that same test backend and
 closes it afterward; it requires a desktop session that allows GUI processes.
 

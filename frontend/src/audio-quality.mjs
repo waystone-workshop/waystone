@@ -18,6 +18,8 @@ export function normalizeAudioPreferences(value) {
     noiseSuppression: source.noiseSuppression !== false,
     echoCancellation: source.echoCancellation !== false,
     autoGainControl: source.autoGainControl !== false,
+    inputMode: source.inputMode === "manual" ? "manual" : "automatic",
+    inputThreshold: Number.isFinite(Number(source.inputThreshold)) ? Math.max(-70, Math.min(-10, Number(source.inputThreshold))) : -48,
     deviceId: typeof source.deviceId === "string" ? source.deviceId : "",
   };
 }

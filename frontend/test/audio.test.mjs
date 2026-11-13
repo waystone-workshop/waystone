@@ -8,7 +8,7 @@ import { videoCaptureFor, writeVideoPreferences } from "../src/video-quality.mjs
 import { allowMicrophone } from "../media-policy.cjs";
 import { displayMediaStream } from "../display-media.cjs";
 
-function fixture(credentials = async () => ({ url: "ws://127.0.0.1:7880", token: "token" })) {
+function fixture(credentials = async () => ({ url: "ws://127.0.0.1:7880", token: "token" }), options = {}) {
   const room = new EventEmitter();
   let enabled = false, stops = 0, snapshot, failure;
   room.remoteParticipants = new Map();
@@ -21,7 +21,7 @@ function fixture(credentials = async () => ({ url: "ws://127.0.0.1:7880", token:
   room.disconnect = async () => { enabled = false; stops++; };
   const elements = [];
   const call = new AudioCall({
-    createRoom: () => room, events: new Proxy({}, { get: (_, event) => event }),
+    ...options, createRoom: () => room, events: new Proxy({}, { get: (_, event) => event }),
     credentials, audioHost: { append: (node) => elements.push(node),
       replaceChildren: () => { elements.length = 0; }, querySelectorAll: () => elements },
     changed: (value) => { snapshot = value; }, failed: (error) => { failure = error; },
@@ -152,9 +152,7 @@ test("microphone constraints keep the chosen device while switching suppression"
 });
 
 function microphone(track) {
-  const f = fixture();
-  f.call.createProcessor = () => ({ name: "waystone-rnnoise" });
-  f.call.microphoneSource = "microphone";
+  const f = fixture(undefined, { createProcessor: () => ({ name: "waystone-rnnoise" }), microphoneSource: "microphone" });
   f.room.localParticipant.getTrackPublication = (source) => source === "microphone" ? { track } : undefined;
   return f;
 }
@@ -302,15 +300,18 @@ test("leaving and turning the camera off take the picture down", async () => {
   assert.equal(f.snapshot.camera, false);
 });
 
-test("platform voice isolation is not stacked with the noise model", async () => {
+test("platform isolation still gets detection without a second noise model", async () => {
   let used = false;
   const f = microphone({
     getSourceTrackSettings: () => ({ voiceIsolation: true, deviceId: "mic-1" }),
     setProcessor: async () => { used = true; },
     applyConstraints: async () => { throw new Error("constraints should stay untouched"); },
   });
+  let denoise;
+  f.call.createProcessor = preferences => { denoise = preferences.noiseSuppression; return { name: "voice-gate" }; };
   await f.call.join(1);
-  assert.equal(used, false);
+  assert.equal(denoise, false);
+  assert.equal(used, true);
   assert.equal(f.snapshot.state, "connected");
 });
 
@@ -324,7 +325,7 @@ test("voice preferences keep one suppressor unless the listener turns it off", (
   assert.equal(quiet.deviceId, "mic-9");
 });
 
-test("turning noise suppression off skips the noise model", async () => {
+test("turning noise suppression off retains voice detection without denoising", async () => {
   const store = globalThis.localStorage;
   const values = new Map();
   globalThis.localStorage = {
@@ -340,8 +341,11 @@ test("turning noise suppression off skips the noise model", async () => {
       setProcessor: async () => { used = true; },
       applyConstraints: async () => {},
     });
+    let denoise;
+    f.call.createProcessor = preferences => { denoise = preferences.noiseSuppression; return { name: "voice-gate" }; };
     await f.call.join(1);
-    assert.equal(used, false);
+    assert.equal(denoise, false);
+    assert.equal(used, true);
     assert.equal(f.snapshot.state, "connected");
   } finally {
     if (store) globalThis.localStorage = store;
@@ -369,4 +373,16 @@ test("the noise model replaces browser suppression and a failure restores it", a
   await failed.call.join(1);
   assert.deepEqual(restored, [false, true]);
   assert.equal(failed.snapshot.state, "connected");
+});
+
+test('constructor wiring installs the processor and live changes restart the real microphone source', async () => {
+  let made = 0, restarts = 0;
+  const track = { getSourceTrackSettings: () => ({}), applyConstraints: async () => {}, setProcessor: async () => { made++; }, stopProcessor: async () => {}, restartTrack: async () => { restarts++; } };
+  const f = fixture(undefined, { microphoneSource: 'microphone', createProcessor: () => ({ name: 'test-processor' }) });
+  f.room.localParticipant.getTrackPublication = source => source === 'microphone' ? { track } : undefined;
+  await f.call.join(1);
+  assert.equal(made, 1);
+  await f.call.applyAudio();
+  assert.equal(restarts, 1); assert.equal(made, 2);
+  f.call.leave(); await f.call.applyAudio(); assert.equal(restarts, 1);
 });
