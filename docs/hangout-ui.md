@@ -13,11 +13,13 @@ away on the sign-in screen.
 Voice rooms are stored separately from text channels. The migration creates
 `campfire`; moderators and admins can create/delete additional voice rooms.
 The lobby is the voice room, and it stays a place people can hop in and out of.
-It sits above the composer while people are only talking: the room name, who is
-there, and Jump in. Hopping out leaves that lobby up for everyone else. A
-camera or a shared screen docks the lobby beside the conversation. One picture
-is large, the others sit in a strip, and clicking one gives it the large spot.
-On a narrow window that picture stacks above the conversation.
+It sits above the composer while people are talking or on camera: the room
+name, who is there, face tiles, and Jump in. Mute, camera, share, and Hop out
+stay on that bar. The chat stays full width. Hopping
+out leaves that lobby up for everyone else. A shared screen, or a face someone
+clicks, docks beside the conversation and takes the wider side. The other
+pictures stay in a strip. On a narrow window that picture stacks above the
+conversation.
 
 Changing text spaces, opening/closing a board, and deleting a text space do not
 leave the lobby. Joining a different lobby asks first. Hopping out, signing out,

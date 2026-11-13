@@ -147,7 +147,8 @@ const call = new AudioCall({
       : state === "reconnecting" ? "Finding the room again…" : "You're in";
     $("call-channel").textContent = activeVoiceRoom?.name.replaceAll("-", " ") || "Voice";
     $("call-count").textContent = participants.length ? `· ${participants.length}` : "";
-    $("call-mute").innerHTML = icon(muted ? "muted" : "mic");
+    $("call-mute").querySelector("[data-icon]").innerHTML = icon(muted ? "muted" : "mic");
+    $("call-mute").querySelector(".control-label").textContent = muted ? "Unmute" : "Mute";
     $("call-mute").setAttribute("aria-label", muted ? "Unmute microphone" : "Mute microphone");
     $("call-mute").title = muted ? "Unmute microphone" : "Mute microphone";
     $("call-mute").setAttribute("aria-pressed", String(muted));
@@ -156,10 +157,12 @@ const call = new AudioCall({
     $("call-camera").setAttribute("aria-pressed", String(Boolean(camera)));
     $("call-camera").title = camera ? "Turn camera off" : "Turn camera on";
     $("call-camera").setAttribute("aria-label", camera ? "Turn camera off" : "Turn camera on");
+    $("call-camera").querySelector(".control-label").textContent = camera ? "Camera off" : "Camera";
     $("call-share").disabled = state !== "connected";
     $("call-share").setAttribute("aria-pressed", String(Boolean(sharing)));
     $("call-share").title = sharing ? "Stop sharing" : "Share a window or the desk";
     $("call-share").setAttribute("aria-label", sharing ? "Stop sharing" : "Share a window or the desk");
+    $("call-share").querySelector(".control-label").textContent = sharing ? "Stop share" : "Share";
     $("call-deafen").textContent = deafened ? "Enable sound" : "Deafen";
     $("call-deafen").setAttribute("aria-pressed", String(deafened));
     $("call-resume").hidden = !playbackBlocked;
