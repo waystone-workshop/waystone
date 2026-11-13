@@ -1,4 +1,9 @@
 const worklets = new WeakMap();
+const gateWorklets = new WeakMap();
+function loadGateWorklet(context) {
+  if (!gateWorklets.has(context)) gateWorklets.set(context, context.audioWorklet.addModule(new URL("dist/voice-gate-worklet.js", document.baseURI)));
+  return gateWorklets.get(context);
+}
 const simdProbe = new Uint8Array([
   0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11,
 ]);
@@ -24,7 +29,7 @@ async function closeContext(context, owns) {
 
 // RNNoise needs 48 kHz frames. A context at another rate would shift the voice,
 // so the processor owns a 48 kHz context and lets the browser resample into it.
-export function createNoiseProcessor() {
+function createDenoiser() {
   let generation = 0;
   let context, source, node, destination, ownsContext = false;
   const processor = {
@@ -93,5 +98,60 @@ export function createNoiseProcessor() {
     await closeContext(closing, owns);
   }
 
+  return processor;
+}
+
+// The same chain powers calls and the local settings meter.
+export function createNoiseProcessor(preferences = {}, onLevel = () => {}) {
+  let context, source, gate, output, denoiser, owns = false, generation = 0;
+  const processor = {
+    name: 'waystone-rnnoise', processedTrack: undefined,
+    init(options) { return processor.restart(options); },
+    async restart(options) {
+      const current = ++generation;
+      await release();
+      if (current !== generation) return;
+      const created = options.audioContext?.sampleRate === 48000 ? options.audioContext : new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
+      const ownContext = created !== options.audioContext;
+      let localDenoiser, localSource, localGate, localOutput;
+      const cleanup = async () => {
+        localSource?.disconnect(); localGate?.disconnect();
+        if (localGate) localGate.port.onmessage = null;
+        localOutput?.stream.getTracks().forEach(track => track.stop());
+        await localDenoiser?.destroy();
+        if (ownContext) await created.close().catch(() => {});
+      };
+      try {
+        if (created.state === 'suspended') await created.resume();
+        let input = options.track;
+        if (preferences.noiseSuppression !== false) {
+          localDenoiser = createDenoiser();
+          await localDenoiser.init({ ...options, audioContext: created });
+          input = localDenoiser.processedTrack;
+        }
+        await loadGateWorklet(created);
+        if (current !== generation) { await cleanup(); return; }
+        localSource = created.createMediaStreamSource(new MediaStream([input]));
+        localGate = new AudioWorkletNode(created, 'waystone-voice-gate', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: preferences });
+        localGate.port.onmessage = event => onLevel(event.data);
+        localOutput = created.createMediaStreamDestination();
+        localSource.connect(localGate); localGate.connect(localOutput);
+        context = created; owns = ownContext; denoiser = localDenoiser;
+        source = localSource; gate = localGate; output = localOutput;
+        processor.processedTrack = output.stream.getAudioTracks()[0];
+      } catch (error) { await cleanup(); throw error; }
+    },
+    configure(next) { preferences = { ...preferences, ...next }; gate?.port.postMessage(preferences); },
+    async destroy() { generation++; await release(); },
+  };
+  async function release() {
+    const old = { context, owns, source, gate, output, denoiser };
+    context = source = gate = output = denoiser = undefined; owns = false; processor.processedTrack = undefined;
+    old.source?.disconnect(); old.gate?.disconnect();
+    if (old.gate) old.gate.port.onmessage = null;
+    old.output?.stream.getTracks().forEach(track => track.stop());
+    await old.denoiser?.destroy();
+    if (old.owns) await old.context.close().catch(() => {});
+  }
   return processor;
 }

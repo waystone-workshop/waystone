@@ -13,6 +13,7 @@ async function main() {
     loader:{".wasm":"binary"},
     define:{"process.env.WAYSTONE_SERVER_URL":JSON.stringify(defaultServer)} });
   await copyFile(resolve(__dirname,"../node_modules/@sapphi-red/web-noise-suppressor/dist/rnnoise/workletProcessor.js"), resolve(dist,"rnnoise-worklet.js"));
+  for (const name of ["voice-gate-worklet.js", "voice-activity.mjs"]) await copyFile(resolve(__dirname, "../src", name), resolve(dist, name));
   copyAssets(resolve(__dirname,"../dist/design-system"));
 }
 main().catch(error=>{console.error(error);process.exitCode=1});

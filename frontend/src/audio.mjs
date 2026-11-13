@@ -1,10 +1,10 @@
-import { microphoneConstraints, readAudioPreferences } from "./audio-quality.mjs";
+import { microphoneConstraints, readAudioPreferences, voiceCaptureFor } from "./audio-quality.mjs";
 import { readVideoPreferences, videoCaptureFor } from "./video-quality.mjs";
 
 // A call owns its room, microphone, and playback elements until leave().
 export class AudioCall {
-  constructor({ createRoom, events, credentials, changed, failed, audioHost, mediaRoot, videoStage, videoCameras, prepareShare, cameraSource, screenSource }) {
-    Object.assign(this, { createRoom, events, credentials, changed, failed, audioHost, mediaRoot, videoStage, videoCameras, prepareShare, cameraSource, screenSource });
+  constructor({ createRoom, events, credentials, changed, failed, audioHost, mediaRoot, videoStage, videoCameras, prepareShare, cameraSource, screenSource, createProcessor, microphoneSource }) {
+    Object.assign(this, { createRoom, events, credentials, changed, failed, audioHost, mediaRoot, videoStage, videoCameras, prepareShare, cameraSource, screenSource, createProcessor, microphoneSource });
     this.version = 0;
     this.room = null;
     this.state = "idle";
@@ -22,7 +22,7 @@ export class AudioCall {
       ? [this.room.localParticipant, ...this.room.remoteParticipants.values()]
       : [];
     this.changed({
-      state: this.state, muted: this.muted, deafened: this.deafened,
+      processing: this.processing || "Not in a call", state: this.state, muted: this.muted, deafened: this.deafened,
       camera: this.cameraOn, sharing: this.sharing,
       playbackBlocked: this.playbackBlocked,
       participants: participants.map((p) => ({
@@ -115,21 +115,43 @@ export class AudioCall {
   }
 
   async enhanceMicrophone(room) {
-    if (this.audioPreferences?.noiseSuppression === false || !this.createProcessor) return;
-    const publication = room.localParticipant.getTrackPublication?.(this.microphoneSource);
-    const track = publication?.track;
+    if (!this.createProcessor) return;
+    const track = room.localParticipant.getTrackPublication?.(this.microphoneSource)?.track;
     if (!track?.setProcessor) return;
     const settings = track.getSourceTrackSettings?.() || {};
-    // The platform model already replaced browser suppression. A second model
-    // removes consonants instead of noise.
-    if (settings.voiceIsolation) return;
+    const denoise = this.audioPreferences.noiseSuppression && !settings.voiceIsolation;
     try {
-      await track.applyConstraints(microphoneConstraints(settings, false, this.audioPreferences));
+      if (denoise) await track.applyConstraints(microphoneConstraints(settings, false, this.audioPreferences));
       if (room !== this.room) return;
-      await track.setProcessor(this.createProcessor());
+      await track.setProcessor(this.createProcessor({ ...this.audioPreferences, noiseSuppression: denoise }));
+      this.processing = denoise ? "Waystone noise reduction + voice detection" : settings.voiceIsolation ? "System isolation + voice detection" : "Voice detection · noise reduction off";
     } catch {
-      if (room === this.room) await track.applyConstraints(microphoneConstraints(settings, true, this.audioPreferences)).catch(() => {});
+      if (room !== this.room) return;
+      await track.stopProcessor?.().catch(() => {});
+      await track.applyConstraints(microphoneConstraints(settings, this.audioPreferences.noiseSuppression, this.audioPreferences)).catch(() => {});
+      this.processing = "Voice detection unavailable · using browser audio. Try rejoining.";
     }
+  }
+
+  applyAudio(patch = {}) {
+    this.audioChange = (this.audioChange || Promise.resolve()).catch(() => {}).then(async () => {
+      const room = this.room;
+      if (!room || this.state !== 'connected') return;
+      this.audioPreferences = readAudioPreferences();
+      const track = room.localParticipant.getTrackPublication?.(this.microphoneSource)?.track;
+      if (!track) return;
+      const processor = track.getProcessor?.();
+      if (Object.keys(patch).length && Object.keys(patch).every(key => ['inputMode', 'inputThreshold'].includes(key)) && processor?.configure) {
+        processor.configure(this.audioPreferences);
+        return;
+      }
+      await track.stopProcessor?.();
+      await track.restartTrack(voiceCaptureFor(this.audioPreferences));
+      if (room !== this.room) return;
+      await this.enhanceMicrophone(room);
+      this.update();
+    });
+    return this.audioChange;
   }
 
   capture() {
@@ -322,6 +344,8 @@ export class AudioCall {
     try {
       const enabled = this.muted;
       await room.localParticipant.setMicrophoneEnabled(enabled);
+      if (room !== this.room) return;
+      if (enabled) await this.enhanceMicrophone(room);
       if (room !== this.room) return;
       this.muted = !enabled;
       this.update();

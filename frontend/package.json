@@ -1,6 +1,6 @@
 {
   "name": "waystone-desktop",
-  "version": "0.6.13",
+  "version": "0.6.14",
   "private": true,
   "repository": {
     "type": "git",
@@ -16,6 +16,8 @@
     "package": "npm run build && electron-builder",
     "package:win": "npm run build && electron-builder --win nsis",
     "package:mac": "npm run build && electron-builder --mac dmg",
+    "test:chat-audio": "npm run build && node e2e/chat-audio.mjs",
+    "test:lobby": "npm run build && node e2e/lobby.mjs",
     "test:e2e": "npm run build && node e2e/smoke.mjs",
     "test:audio": "npm run build && node e2e/audio.mjs",
     "test:accounts": "npm run build && node e2e/accounts.mjs",

@@ -40,6 +40,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run test:e2e
+      - run: npm run test:lobby
+      - run: npm run test:chat-audio
+        if: runner.os == 'Windows'
       - run: npm run package -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"

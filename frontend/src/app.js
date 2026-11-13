@@ -90,6 +90,7 @@ const settings = setupSettings({
   document, bridge: window.waystone, report, openProfile: () => $("profile-open").click(),
   user: () => currentUser, avatar: (person) => profiles.avatar(person),
   onVideoChange: () => call.applyVideo().catch(report),
+  onAudioChange: patch => call.applyAudio(patch),
   permit: () => currentUser?.role === "admin" || canManage() || canAddExpressions(),
   onExpressions: () => renderExpressionShelf(),
 });
@@ -138,9 +139,10 @@ const call = new AudioCall({
   credentials: (id) => api(`/voice-rooms/${id}/call`, { method: "POST" }),
   audioHost: $("call-audio"),
   failed: report,
-  changed: ({ state, muted, deafened, participants, playbackBlocked, camera, sharing }) => {
+  changed: ({ state, muted, deafened, participants, playbackBlocked, camera, sharing, processing }) => {
     voiceState = { state, muted, deafened, participants, playbackBlocked, camera, sharing };
     const idle = state === "idle";
+    $("audio-processing-status").textContent = idle ? "Join a call to see its active audio processing." : processing;
     if (idle) $("call-media").hidden = true;
     $("call-panel").hidden = idle;
     $("call-state").textContent = state === "joining" ? "Hopping in…"
@@ -762,7 +764,8 @@ function renderMessages(pin) {
       const portrait = el(message.user_id ? "button" : "span", undefined, "message-avatar");
       portrait.append(profiles.avatar(profiles.get(message.user_id) || { display_name: message.author, avatar_color: "slate" }));
       if (message.user_id) { portrait.setAttribute("aria-label", `View ${message.author}'s profile`); portrait.onclick = () => profiles.show(message.user_id, portrait); }
-      row.append(check, portrait, content, messageActions(message));
+      meta.append(messageActions(message));
+      row.append(check, portrait, content);
       return row;
     }),
   );
@@ -891,14 +894,46 @@ function actionButton(name, label, onClick) {
 }
 function messageActions(message) {
   const actions = el("div", undefined, "message-actions");
+  actions.setAttribute("role", "group");
+  actions.setAttribute("aria-label", "Message actions");
   actions.append(actionButton("smile", "Add reaction", () => openExpressions("react", message)));
   actions.append(actionButton("reply", "Reply", () => startReply(message)));
-  if (message.user_id && message.user_id === currentUser?.id)
-    actions.append(actionButton("pen", "Edit", () => startEdit(message)));
-  if ((message.user_id && message.user_id === currentUser?.id) || canManage())
-    actions.append(actionButton("trash", "Delete", () => removeMessage(message).catch(report)));
+  const own = message.user_id && message.user_id === currentUser?.id;
+  if (own || canManage()) {
+    const more = el("details", undefined, "message-more");
+    const summary = el("summary");
+    summary.setAttribute("aria-label", "More message actions");
+    summary.title = "More message actions";
+    summary.innerHTML = icon("more");
+    const menu = el("div", undefined, "message-menu");
+    const item = (label, action, danger = false) => {
+      const button = el("button", label, danger ? "danger-text" : "");
+      button.type = "button";
+      button.onclick = () => { more.open = false; action(); };
+      menu.append(button);
+    };
+    if (own) item("Edit message", () => startEdit(message));
+    item("Delete message", () => removeMessage(message).catch(report), true);
+    more.append(summary, menu);
+    more.addEventListener("toggle", () => {
+      if (more.open) {
+        document.querySelectorAll(".message-more[open]").forEach(other => { if (other !== more) other.open = false; });
+        more.classList.remove("opens-up");
+        const boundary = $("messages").getBoundingClientRect();
+        const bounds = menu.getBoundingClientRect();
+        if (bounds.bottom > boundary.bottom && summary.getBoundingClientRect().top - bounds.height >= boundary.top) more.classList.add("opens-up");
+      }
+    });
+    actions.append(more);
+  }
   return actions;
 }
+document.addEventListener("click", event => {
+  document.querySelectorAll(".message-more[open]").forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") document.querySelectorAll(".message-more[open]").forEach(menu => { menu.open = false; menu.querySelector("summary").focus(); });
+});
 function startReply(message) {
   if (editing) cancelEdit();
   replying = message;
@@ -1103,8 +1138,10 @@ function openExpressions(purpose, message) {
   expressionPurpose = purpose;
   reactingTo = message || null;
   expressionKind = "emoji";
+  $("expression-search").value = "";
   renderExpressionGrid();
   $("expression-dialog").showModal();
+  $("expression-search").focus();
 }
 function renderExpressionGrid() {
   if (expressionPurpose === "react") expressionKind = "emoji";
@@ -1112,11 +1149,14 @@ function renderExpressionGrid() {
   $("sticker-tab").hidden = expressionPurpose === "react";
   $("emoji-tab").setAttribute("aria-pressed", String(expressionKind === "emoji"));
   $("sticker-tab").setAttribute("aria-pressed", String(expressionKind === "sticker"));
-  const items = expressionKind === "emoji" ? library.emoji : library.stickers;
+  const query = $("expression-search").value.trim().toLowerCase();
+  const available = expressionKind === "emoji" ? library.emoji : library.stickers;
+  const items = available.filter(item => item.name.toLowerCase().includes(query));
+  $("expression-grid").dataset.kind = expressionKind;
   const grid = $("expression-grid");
   grid.replaceChildren();
   if (!items.length) {
-    grid.append(el("p", expressionKind === "emoji" ? "No custom emoji yet." : "No stickers yet.", "subtle"));
+    grid.append(el("p", query ? "No matches. Try another name." : expressionKind === "emoji" ? "No custom emoji yet. Add some in Settings → Expressions." : "No stickers yet. Add some in Settings → Expressions.", "subtle"));
     return;
   }
   for (const item of items) {
@@ -1126,6 +1166,8 @@ function renderExpressionGrid() {
     const image = el("img");
     image.alt = item.name;
     loadExpression(item, image);
+    button.setAttribute("aria-label", item.name);
+    button.title = item.name;
     button.append(image, el("span", item.name));
     button.onclick = () => useExpression(item).catch(report);
     card.append(button);
@@ -1196,8 +1238,9 @@ async function useExpression(item) {
     const end = area.selectionEnd ?? start;
     area.value = area.value.slice(0, start) + token + area.value.slice(end);
     if (!editing) saveDraft();
-    area.focus();
     $("expression-dialog").close();
+    area.focus();
+    area.setSelectionRange(start + token.length, start + token.length);
     return;
   }
   if (!channelId || sending || editing) return;
@@ -1226,6 +1269,7 @@ function bytesToBase64(bytes) {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
   return btoa(binary);
 }
+$("expression-search").addEventListener("input", renderExpressionGrid);
 $("expressions").onclick = () => openExpressions("insert");
 $("expression-kind")?.addEventListener("change", () => renderExpressionShelf());
 $("emoji-tab").onclick = () => {
